@@ -10,7 +10,11 @@ title:  Human-River Geomorphic Coupling
 <h1>Human-River Geomorphic Coupling</h1>
 
 <p>
-Meandering rivers attract civilization but destroy it when they shift course. <b>Human-River</b> couples these forces into a single dynamical system on a cellular automaton. The grid has two cell types: <b style="color:#00f;">river cells</b> (blue) and <b>floodplain cells</b> (black). Floodplain cells can host settlements, which are colored by their status each timestep: <b style="color:#ff8000;">stable</b> (orange, persisted from the previous step), <b style="color:#1aff1a;">new</b> (green, just placed), <b style="color:#aaa;">abandoned</b> (white, voluntarily vacated), and <b style="color:#ff1a1a;">drowned</b> (red, destroyed by the river). Population is conserved &mdash; every drowned or abandoned cell is relocated elsewhere.
+Lowland rivers are dynamic systems that meander, erode, and periodically cut off their own bends. Throughout history these channels have acted as spatial attractors for human settlement &mdash; providing water, fertile soil, and transportation &mdash; while simultaneously threatening to destroy the very communities they sustain. Settlements that form near a river must balance three competing forces: <i>river attraction</i> (proximity to resources), <i>economies of scale</i> (clustering with other settlements to share infrastructure), and <i>spatial inertia</i> (the sunk cost of abandoning existing buildings). <b>Human-River</b> is a cellular-automaton model that couples a migrating meandering river with a population of settlement cells governed by these three forces.
+</p>
+
+<p>
+The simulation grid contains two cell types: <b style="color:#00f;">river cells</b> (blue) and <b>floodplain cells</b> (black). Floodplain cells can host settlement cells, which are colored by their status each timestep: <b style="color:#ff8000;">stable</b> (orange &mdash; persisted from the previous step), <b style="color:#1aff1a;">new settlement</b> (green &mdash; just placed), <b style="color:#aaa;">abandoned</b> (white &mdash; voluntarily vacated), and <b style="color:#ff1a1a;">drowned</b> (red &mdash; destroyed by the advancing river). Population is conserved: every drowned or abandoned cell is relocated to the best available site.
 </p>
 
 <p>
@@ -22,7 +26,7 @@ U(\mathbf{x}, t) \;=\; -\,w_d \, D(\mathbf{x}, t) \;+\; w_c \, C(\mathbf{x}, t)
 \]
 
 <p>
-where \(D\) is the Euclidean distance to the nearest river cell and \(w_d\) controls how strongly settlements are attracted to the river. \(C\) counts the occupied Moore neighbors (8-connected) and \(w_c\) controls the clustering incentive (economies of scale). The friction threshold \(\mu\) sets the minimum utility gain required for a voluntary move &mdash; higher \(\mu\) means settlements are more inert. Press <b>Play</b> and tune the sliders.
+where \(D(\mathbf{x}, t)\) is the Euclidean distance to the nearest river cell and \(w_d\) (river attraction weight) controls how strongly settlements are pulled toward the channel. \(C(\mathbf{x}, t)\) counts the occupied Moore neighbors (8-connected) and \(w_c\) (cohesion weight) controls the clustering incentive. The friction threshold \(\mu\) sets the minimum utility gain required for a voluntary move &mdash; higher \(\mu\) means settlements are more inert and resist relocation. Press <b>Play</b> and tune the sliders.
 </p>
 
 <!-- ═══ Simulator ═══ -->
