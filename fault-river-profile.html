@@ -20,50 +20,46 @@ with drainage area from Hack's law \( A = (L - x)^h \).
 
 <style>
   .pnl-lbl {
-    font: 10px/1 'Courier New', Courier, monospace;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #33cc33;
-    margin: 10px 0 3px 0;
-    text-shadow: 0 0 6px rgba(51,255,51,0.3);
+    font: 11px/1 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: 0.03em;
+    color: #2171b5;
+    margin: 12px 0 4px 0;
+    font-weight: 500;
   }
   .pnl-lbl:first-child { margin-top: 0; }
   #sim-container canvas {
     width: 100%; display: block;
-    border: 1px solid #1a3a1a;
   }
   #sim-info {
-    font: 11px/1.4 'Courier New', Courier, monospace;
-    color: #33cc33;
-    letter-spacing: 0.03em;
-    text-shadow: 0 0 6px rgba(51,255,51,0.25);
+    font: 11px/1.4 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #6baed6;
   }
   #sim-controls button {
-    background: #0a0a0a; color: #33ff33;
-    border: 1px solid #1a3a1a;
+    background: #fff; color: #2171b5;
+    border: 1px solid #c6dbef; border-radius: 4px;
     padding: 5px 14px;
-    font: 12px/1 'Courier New', Courier, monospace;
+    font: 12px/1 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     cursor: pointer; transition: background 0.15s, border-color 0.15s;
-    text-shadow: 0 0 4px rgba(51,255,51,0.3);
   }
-  #sim-controls button:hover:not(:disabled) { background: #0d1f0d; border-color: #33ff33; }
-  #sim-controls button:disabled { opacity: 0.3; cursor: default; }
+  #sim-controls button:hover:not(:disabled) { background: #eff3ff; border-color: #6baed6; }
+  #sim-controls button:disabled { opacity: 0.35; cursor: default; }
   #sim-controls label {
-    font: 13px/1 'Courier New', Courier, monospace; color: #33cc33;
-    text-shadow: 0 0 4px rgba(51,255,51,0.2);
+    font: 13px/1 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #2171b5;
   }
   #sim-controls span {
-    font: 12px/1 'Courier New', Courier, monospace; color: #66ff66;
+    font: 12px/1 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #6baed6;
   }
   #sim-controls input[type="range"] {
     -webkit-appearance: none; appearance: none;
-    height: 3px; background: #1a3a1a; border-radius: 0; outline: none;
+    height: 3px; background: #c6dbef; border-radius: 2px; outline: none;
   }
   #sim-controls input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
-    width: 12px; height: 12px; border-radius: 0;
-    background: #33ff33; cursor: pointer;
-    border: 1px solid #000;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: #2171b5; cursor: pointer;
+    border: 2px solid #fff; box-shadow: 0 0 0 1px #c6dbef;
   }
 </style>
 
@@ -207,7 +203,7 @@ function makePlotTransform(cw, ch, xMin, xMax, yMin, yMax) {
 function drawPlot(ctx, cw, ch, opts) {
   var t = opts.transform;
 
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, cw, ch);
 
   // filled area
@@ -249,18 +245,12 @@ function drawPlot(ctx, cw, ch, opts) {
       var ncy = t.toCanvasY(nd.y[ni]);
       ctx.beginPath();
       ctx.arc(ncx, ncy, 5, 0, 2 * Math.PI);
-      ctx.fillStyle = "#ef4444";
+      ctx.fillStyle = "#084594";
       ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      ctx.strokeStyle = "#fff";
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }
-  }
-
-  // CRT scanlines
-  ctx.fillStyle = "rgba(0,0,0,0.07)";
-  for (var sl = 0; sl < ch; sl += 3) {
-    ctx.fillRect(0, sl, cw, 1);
   }
 }
 
@@ -480,25 +470,11 @@ document.addEventListener("touchend", onUp);
    ================================================================ */
 function renderFault() {
   var cw = canvasFault.width, ch = canvasFault.height;
-  var zMin = 0, zMax = 0;
-  for (var i = 0; i < NX; i++) {
-    if (faultZ[i] < zMin) zMin = faultZ[i];
-    if (faultZ[i] > zMax) zMax = faultZ[i];
-  }
-  for (var j = 0; j < nNodes; j++) {
-    if (zctrl[j] < zMin) zMin = zctrl[j];
-    if (zctrl[j] > zMax) zMax = zctrl[j];
-  }
-  var span = zMax - zMin;
-  var mg = Math.max(3, span * 0.15);
-  zMin -= mg; zMax += mg;
-  if (zMax - zMin < 5) { var mid = (zMax + zMin) / 2; zMin = mid - 2.5; zMax = mid + 2.5; }
-
-  faultTr = makePlotTransform(cw, ch, 0, X_END, zMin, zMax);
+  faultTr = makePlotTransform(cw, ch, 0, X_END, -50, 10);
   drawPlot(ctxFault, cw, ch, {
     transform: faultTr,
-    fill: { x: xGrid, y: faultZ, color: "#1a0a0f", base: "bottom" },
-    lines: [{ x: xGrid, y: faultZ, color: "#ef4444", width: 2 }],
+    fill: { x: xGrid, y: faultZ, color: "rgba(8,69,148,0.08)", base: "bottom" },
+    lines: [{ x: xGrid, y: faultZ, color: "#084594", width: 2 }],
     nodes: { x: xctrl, y: zctrl }
   });
 }
@@ -518,8 +494,8 @@ function renderUplift() {
   var t = makePlotTransform(cw, ch, 0, X_END, uMin, uMax);
   drawPlot(ctxUplift, cw, ch, {
     transform: t,
-    fill: { x: xGrid, y: upliftRate, color: "rgba(251,191,36,0.15)" },
-    lines: [{ x: xGrid, y: upliftRate, color: "#fbbf24", width: 2 }]
+    fill: { x: xGrid, y: upliftRate, color: "rgba(33,113,181,0.10)" },
+    lines: [{ x: xGrid, y: upliftRate, color: "#4292c6", width: 2 }]
   });
 }
 
@@ -536,8 +512,8 @@ function renderTopo() {
   var t = makePlotTransform(cw, ch, 0, X_END, zMin2, zMax2);
   drawPlot(ctxTopo, cw, ch, {
     transform: t,
-    fill: { x: xGrid, y: topoZ, color: "#0a2a0f", base: "bottom" },
-    lines: [{ x: xGrid, y: topoZ, color: "#33ff33", width: 2 }]
+    fill: { x: xGrid, y: topoZ, color: "rgba(33,113,181,0.15)", base: "bottom" },
+    lines: [{ x: xGrid, y: topoZ, color: "#2171b5", width: 2 }]
   });
 }
 
