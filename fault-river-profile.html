@@ -103,9 +103,6 @@ with drainage area from Hack's law \( A = (L - x)^h \).
     <input id="sl-h" type="range" min="1.0" max="2.5" step="0.1" value="1.67">
     <span id="val-h">1.67</span>
 
-    <label for="sl-delay">delay</label>
-    <input id="sl-delay" type="range" min="0" max="200" step="5" value="30">
-    <span id="val-delay">30 ms</span>
   </div>
 </div>
 
@@ -133,7 +130,6 @@ let upliftRate = new Float64Array(NX);
 let topoZ = new Float64Array(NX);
 let playing = false;
 let animFrameId = null;
-let lastFrameTime = 0;
 let simStep = 0;
 let simTime = 0;
 
@@ -171,7 +167,6 @@ const sliders = {
   m:     { el: document.getElementById("sl-m"),     valEl: document.getElementById("val-m"),     fmt: function(v){return v;} },
   n:     { el: document.getElementById("sl-n"),     valEl: document.getElementById("val-n"),     fmt: function(v){return v;} },
   h:     { el: document.getElementById("sl-h"),     valEl: document.getElementById("val-h"),     fmt: function(v){return v;} },
-  delay: { el: document.getElementById("sl-delay"), valEl: document.getElementById("val-delay"), fmt: function(v){return v + " ms";} },
 };
 
 function getParam(name) { return parseFloat(sliders[name].el.value); }
@@ -270,20 +265,41 @@ function interpFault(xq, xc, zc) {
 }
 
 /* ================================================================
-   Section 4: Uplift Computation (direct from segment angles)
+   Section 4: Uplift via axial-surface intersections
    ================================================================ */
+var axialData = [];  // [{xSurf, xNode, zNode}, ...] for rendering
+
 function computeUplift(xq, xc, zc, slipRate) {
   var nSeg = xc.length - 1;
   var theta = new Float64Array(nSeg);
   for (var k = 0; k < nSeg; k++) {
     theta[k] = Math.atan2(zc[k + 1] - zc[k], xc[k + 1] - xc[k]);
   }
-  var out = new Float64Array(xq.length);
-  var seg = 0;
-  for (var i = 0; i < xq.length; i++) {
-    while (seg < nSeg - 1 && xq[i] > xc[seg + 1]) seg++;
-    out[i] = Math.max(0.0, -slipRate * Math.sin(theta[seg]));
+
+  // Axial surface intersections at each interior kink
+  axialData = [];
+  var xBounds = [];
+  for (var j = 1; j < nSeg; j++) {
+    var g = 0.5 * (theta[j - 1] + theta[j] + Math.PI);
+    var tg = Math.tan(g);
+    if (Math.abs(tg) < 1e-12) continue;
+    var xSurf = xc[j] - zc[j] / tg;
+    axialData.push({ xSurf: xSurf, xNode: xc[j], zNode: zc[j] });
+    xBounds.push(xSurf);
   }
+
+  // Uplift: searchsorted-right into axial boundaries
+  var out = new Float64Array(xq.length);
+  for (var i = 0; i < xq.length; i++) {
+    var dom = 0;
+    for (var b = 0; b < xBounds.length; b++) {
+      if (xBounds[b] <= xq[i]) dom = b + 1;
+    }
+    if (dom > nSeg - 1) dom = nSeg - 1;
+    out[i] = Math.max(0.0, -slipRate * Math.sin(theta[dom]));
+    if (xq[i] < xc[0]) out[i] = 0.0;
+  }
+
   return out;
 }
 
@@ -477,6 +493,35 @@ function renderFault() {
     lines: [{ x: xGrid, y: faultZ, color: "#084594", width: 2 }],
     nodes: { x: xctrl, y: zctrl }
   });
+
+  // Surface reference line at z=0
+  ctxFault.strokeStyle = "rgba(0,0,0,0.12)";
+  ctxFault.lineWidth = 1;
+  ctxFault.beginPath();
+  ctxFault.moveTo(faultTr.toCanvasX(0), faultTr.toCanvasY(0));
+  ctxFault.lineTo(faultTr.toCanvasX(X_END), faultTr.toCanvasY(0));
+  ctxFault.stroke();
+
+  // Axial planes: dashed lines from kink to surface intersection
+  ctxFault.setLineDash([4, 3]);
+  ctxFault.strokeStyle = "#6baed6";
+  ctxFault.lineWidth = 1;
+  for (var ai = 0; ai < axialData.length; ai++) {
+    var ax = axialData[ai];
+    ctxFault.beginPath();
+    ctxFault.moveTo(faultTr.toCanvasX(ax.xNode), faultTr.toCanvasY(ax.zNode));
+    ctxFault.lineTo(faultTr.toCanvasX(ax.xSurf), faultTr.toCanvasY(0));
+    ctxFault.stroke();
+  }
+  ctxFault.setLineDash([]);
+
+  // Dots at surface intersections
+  for (var ai = 0; ai < axialData.length; ai++) {
+    ctxFault.beginPath();
+    ctxFault.arc(faultTr.toCanvasX(axialData[ai].xSurf), faultTr.toCanvasY(0), 3, 0, 2 * Math.PI);
+    ctxFault.fillStyle = "#6baed6";
+    ctxFault.fill();
+  }
 }
 
 function renderUplift() {
@@ -497,6 +542,21 @@ function renderUplift() {
     fill: { x: xGrid, y: upliftRate, color: "rgba(33,113,181,0.10)" },
     lines: [{ x: xGrid, y: upliftRate, color: "#4292c6", width: 2 }]
   });
+
+  // Axial surface intersection markers
+  ctxUplift.setLineDash([3, 3]);
+  ctxUplift.strokeStyle = "rgba(8,69,148,0.2)";
+  ctxUplift.lineWidth = 1;
+  for (var ai = 0; ai < axialData.length; ai++) {
+    var axX = axialData[ai].xSurf;
+    if (axX >= 0 && axX <= X_END) {
+      ctxUplift.beginPath();
+      ctxUplift.moveTo(t.toCanvasX(axX), PAD.top);
+      ctxUplift.lineTo(t.toCanvasX(axX), ch - PAD.bottom);
+      ctxUplift.stroke();
+    }
+  }
+  ctxUplift.setLineDash([]);
 }
 
 function renderTopo() {
@@ -565,12 +625,9 @@ function doStep() {
   updateInfo();
 }
 
-function animate(ts) {
+function animate() {
   if (!playing) return;
-  if (ts - lastFrameTime >= getParam("delay")) {
-    lastFrameTime = ts;
-    doStep();
-  }
+  doStep();
   animFrameId = requestAnimationFrame(animate);
 }
 
@@ -578,7 +635,6 @@ function play() {
   playing = true;
   btnPlay.disabled = true;
   btnPause.disabled = false;
-  lastFrameTime = performance.now();
   animFrameId = requestAnimationFrame(animate);
 }
 
