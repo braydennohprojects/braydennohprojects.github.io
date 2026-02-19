@@ -54,8 +54,8 @@ This simulator models topographic evolution over a planar reverse fault using th
   <div class="sliders-container">
     <div class="slider-group">
       <label for="sl-interval">Earthquake Cycle (Slip Deficit):</label>
-      <input id="sl-interval" type="range" min="0" max="10010" step="10" value="100">
-      <div class="slider-val" id="val-interval">100 yr</div>
+      <input id="sl-interval" type="range" min="0" max="10010" step="10" value="5000">
+      <div class="slider-val" id="val-interval">5000 yr</div>
     </div>
     <div class="slider-group">
       <label for="sl-locked">Locking Depth:</label>
@@ -64,8 +64,8 @@ This simulator models topographic evolution over a planar reverse fault using th
     </div>
     <div class="slider-group">
       <label for="sl-speed">Simulation Speed:</label>
-      <input id="sl-speed" type="range" min="1" max="200" step="1" value="20">
-      <div class="slider-val" id="val-speed">20x</div>
+      <input id="sl-speed" type="range" min="1" max="200" step="1" value="100">
+      <div class="slider-val" id="val-speed">100x</div>
     </div>
   </div>
 </div>
@@ -120,7 +120,7 @@ var M_EXP = 0.5;
 var N_EXP = 1.0;
 var H_EXP = 1.67;
 var DT = 1; // 1 year per step
-var STEPS_PER_FRAME = 20;
+var STEPS_PER_FRAME = 100;
 
 var upliftRed = new Float64Array(NX);
 var upliftBlue = new Float64Array(NX);
