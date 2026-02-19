@@ -10,7 +10,11 @@ title:  Human-River Geomorphic Coupling
 <h1>Human-River Geomorphic Coupling</h1>
 
 <p>
-Meandering rivers attract civilization but destroy it when they shift course. <b>Human-River</b> couples these forces into a single dynamical system. Each cell's utility is
+Meandering rivers attract civilization but destroy it when they shift course. <b>Human-River</b> couples these forces into a single dynamical system on a cellular automaton. The grid has two cell types: <b style="color:#00f;">river cells</b> (blue) and <b>floodplain cells</b> (black). Floodplain cells can host settlements, which are colored by their status each timestep: <b style="color:#ff8000;">stable</b> (orange, persisted from the previous step), <b style="color:#1aff1a;">new</b> (green, just placed), <b style="color:#aaa;">abandoned</b> (white, voluntarily vacated), and <b style="color:#ff1a1a;">drowned</b> (red, destroyed by the river). Population is conserved &mdash; every drowned or abandoned cell is relocated elsewhere.
+</p>
+
+<p>
+Each floodplain cell has a utility
 </p>
 
 \[
@@ -18,7 +22,7 @@ U(\mathbf{x}, t) \;=\; -\,w_d \, D(\mathbf{x}, t) \;+\; w_c \, C(\mathbf{x}, t)
 \]
 
 <p>
-where \(D\) is distance to the river, \(C\) is the number of settlement neighbors, and \(\mu\) is a friction threshold for voluntary relocation. Press <b>Play</b> and tune the sliders.
+where \(D\) is the Euclidean distance to the nearest river cell and \(w_d\) controls how strongly settlements are attracted to the river. \(C\) counts the occupied Moore neighbors (8-connected) and \(w_c\) controls the clustering incentive (economies of scale). The friction threshold \(\mu\) sets the minimum utility gain required for a voluntary move &mdash; higher \(\mu\) means settlements are more inert. Press <b>Play</b> and tune the sliders.
 </p>
 
 <!-- ═══ Simulator ═══ -->
