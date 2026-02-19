@@ -1,25 +1,25 @@
 ---
 layout: default
-title:  Cutoffs Create Chaos in Meandering River
+title:  Meander Cutoffs Induce Chaos
 ---
 
 <p>
 <a href="index.html">Brayden Noh</a>
 </p>
 
-<h1>Cutoffs Create Chaos in Meandering River</h1>
+<h1>Meander Cutoffs Induce Chaos</h1>
 <h3>by Brayden Noh and Omar Wani</h3>
 
 <p>
-Rivers meander. As bends grow, they occasionally loop back on themselves and short-circuit &mdash; an event called a <b>cutoff</b>. We asked a simple question: are cutoffs enough to make river evolution chaotic?
+Lowland rivers are dynamic systems whose evolution is largely governed by the gradual growth of meander bends and episodic <a href="https://en.wikipedia.org/wiki/Meander_cutoff">cutoff</a> events that abruptly reshape its geometry. We asked a simple question: are cutoffs enough to make river evolution chaotic?
 </p>
 
 <p>
-To test this, we ran pairs of simulations using <i>meanderpy</i>, a kinematic meander model where lateral migration is driven by curvature. Each pair starts from nearly identical initial conditions &mdash; differing by a single node displaced by a tiny amount &mdash; and is integrated forward for 10,000 years.
+To test this, we ran pairs of simulations using <a href="https://github.com/zsylvester/meanderpy"><i>meanderpy</i></a>, a kinematic meander model where lateral migration is driven by curvature. Each pair starts from nearly identical initial conditions and simulate 10,000 years of evolution.
 </p>
 
 <p>
-The challenge is that the river centerline changes length over time (nodes are added as bends grow and removed at cutoffs), so we can't directly compare two Lagrangian state vectors. Instead, we map each centerline onto a fixed Eulerian grid of binary cells &mdash; channel (1) or floodplain (0) &mdash; which gives us a fixed-dimensional state for comparison.
+The challenge is that the river geometry changes length over time, so we can't directly compare two Lagrangian state vectors. Instead, we map each centerline onto a fixed Eulerian grid of binary cells: channel (1) or floodplain (0), which gives us a fixed-dimensional state for comparison.
 </p>
 
 <img src="assets/fig1-lagrangian-eulerian.png" alt="Lagrangian and Eulerian representations of the meander model" style="width: 100%; margin: 1em 0;">
