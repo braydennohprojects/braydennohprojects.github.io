@@ -249,7 +249,7 @@ function tvdErosionStep(z, dx, dtMacro, Ke, m, n, DA, cfl) {
             z_new[i] = z[i] - (dt_sub / dx) * (Fr - Fl);
         }
         z_new[0] = 0.0;
-        z_new[nx-1] = z[nx-1]; // Divide accumulates uplift freely
+        z_new[nx-1] = z_new[nx-2]; // Divide mirrors neighbor to prevent spike
 
         for (var i = 0; i < nx; i++) z[i] = Math.max(0, z_new[i]);
     }
