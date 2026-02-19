@@ -56,7 +56,7 @@ Uplift \(U(x,t)\) is partitioned into steady <b>interseismic creeping</b> (deep 
   <div class="sliders-container">
     <div class="slider-group">
       <label for="sl-interval">Earthquake Cycle (Slip Deficit):</label>
-      <input id="sl-interval" type="range" min="10" max="1000" step="10" value="100">
+      <input id="sl-interval" type="range" min="0" max="1010" step="10" value="100">
       <div class="slider-val" id="val-interval">100 yr</div>
     </div>
     <div class="slider-group">
@@ -449,20 +449,32 @@ function getInterval() { return parseInt(slInterval.value); }
 function doStep() {
   var eqInterval = getInterval();
 
-  // 1. Interseismic Uplift
-  for (var i = 1; i < NX; i++) {
-    topoZ[i] += upliftRed[i] * DT;
-  }
-
-  // 2. Check Earthquake Trigger
-  timeSinceLastEq += DT;
-  if (timeSinceLastEq >= eqInterval) {
+  if (eqInterval === 0) {
+    // STEADY STATE: apply full structural rate (red + blue) every step
     for (var i = 1; i < NX; i++) {
-      topoZ[i] += upliftBlue[i] * eqInterval;
+      topoZ[i] += (upliftRed[i] + upliftBlue[i]) * DT;
     }
-    timeSinceLastEq = 0;
-    eqCount++;
-    eqFlashFrames = 15;
+  } else if (eqInterval > 1000) {
+    // NEVER: only interseismic, coseismic never releases
+    for (var i = 1; i < NX; i++) {
+      topoZ[i] += upliftRed[i] * DT;
+    }
+  } else {
+    // Normal earthquake cycle
+    // 1. Interseismic Uplift
+    for (var i = 1; i < NX; i++) {
+      topoZ[i] += upliftRed[i] * DT;
+    }
+    // 2. Check Earthquake Trigger
+    timeSinceLastEq += DT;
+    if (timeSinceLastEq >= eqInterval) {
+      for (var i = 1; i < NX; i++) {
+        topoZ[i] += upliftBlue[i] * eqInterval;
+      }
+      timeSinceLastEq = 0;
+      eqCount++;
+      eqFlashFrames = 15;
+    }
   }
 
   // 3. Fluvial Erosion (TVD Step)
@@ -482,7 +494,13 @@ function updateInfo() {
   for (var i = 0; i < NX; i++) if (topoZ[i] > maxZ) maxZ = topoZ[i];
   infoMaxZ.textContent = (maxZ * 1000).toFixed(2);
   infoEq.textContent = eqCount;
-  infoNext.textContent = Math.max(0, eqInterval - timeSinceLastEq);
+  if (eqInterval === 0) {
+    infoNext.textContent = "N/A";
+  } else if (eqInterval > 1000) {
+    infoNext.textContent = "Never";
+  } else {
+    infoNext.textContent = Math.max(0, eqInterval - timeSinceLastEq);
+  }
 }
 
 function animate() {
@@ -536,8 +554,14 @@ btnPlay.addEventListener("click", play);
 btnPause.addEventListener("click", pause);
 btnReset.addEventListener("click", reset);
 
+function intervalLabel(v) {
+  if (v === 0) return "Steady State";
+  if (v > 1000) return "Never";
+  return v + " yr";
+}
+
 slInterval.addEventListener("input", function () {
-  valInterval.textContent = slInterval.value + " yr";
+  valInterval.textContent = intervalLabel(parseInt(slInterval.value));
   updateInfo();
 });
 
