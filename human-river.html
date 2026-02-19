@@ -7,189 +7,38 @@ title:  Human-River Geomorphic Coupling
 <a href="index.html">Brayden Noh</a>
 </p>
 
-Geomorphology &bull; Cellular Automata &bull; Urban Dynamics
-
 <h1>Human-River Geomorphic Coupling</h1>
 <h3>by Brayden Noh and Omar Wani</h3>
 
-<p>A tutorial introduction to modeling how human settlements evolve around migrating rivers.</p>
-
-<!-- table of contents -->
-
-<div class='toc'>
-
-Contents
-
-<ul>
-  <li><a href="#introduction">1. Introduction</a></li>
-  <li><a href="#the-problem">2. The Problem</a></li>
-  <li><a href="#setting-up">3. Setting Up the Model</a>
-    <ul>
-      <li><a href="#the-lattice">3.1 The Lattice</a></li>
-      <li><a href="#conservation">3.2 Conservation Laws</a></li>
-      <li><a href="#utility">3.3 The Utility Field</a></li>
-    </ul>
-  </li>
-  <li><a href="#dynamics">4. How the Simulation Runs</a>
-    <ul>
-      <li><a href="#geomorphic-migration">4.1 Geomorphic Migration</a></li>
-      <li><a href="#gradient-migration">4.2 Gradient-Driven Migration</a></li>
-    </ul>
-  </li>
-  <li><a href="#what-emerges">5. What Emerges</a></li>
-  <li><a href="#applications">6. Applications</a></li>
-</ul>
-</div>
-
-
-<h2 id="introduction">1. Introduction</h2>
-
 <p>
-Throughout history, meandering rivers have acted as <b>spatial attractors</b> for human civilization. Rivers provide food and transportation, minimizing the thermodynamic work required for resource extraction and navigation. Cities like Cairo, London, and Kolkata all grew around river bends.
+Meandering rivers attract civilization &mdash; providing food, water, and transportation &mdash; but also destroy it when they shift course. <b>Human-River</b> couples these two forces into a single dynamical system on a cellular automaton.
 </p>
 
 <p>
-But rivers are also destroyers. Through a process called <b>avulsion</b>, a river can suddenly shift course and wipe out settlements in its path. In this sense, a river functions as an unpredictable attractor &mdash; one that can create and destroy, analogous to a black hole.
+Each cell on a 2D grid is either <b>river</b>, <b>settlement</b>, or <b>empty floodplain</b>. Population is conserved: if the river drowns a settlement, it must relocate. Each cell's <b>utility</b> is
+</p>
+
+\[
+U(\mathbf{x}, t) \;=\; -\,w_d \, D(\mathbf{x}, t) \;+\; w_c \, C(\mathbf{x}, t)
+\]
+
+<p>
+where \(D\) is the distance to the nearest river cell, \(C\) is the number of occupied Moore neighbors, and \(w_d, w_c\) are tunable coupling weights. River cells have \(U = -\infty\).
 </p>
 
 <p>
-<b>Human-River</b> is a computational model that couples these two forces &mdash; the pull of the river and the resilience of human settlements &mdash; into a single dynamical system. It is the first model of its kind to treat human and geomorphic evolution as a <i>coupled</i> process.
-</p>
-
-
-<h2 id="the-problem">2. The Problem</h2>
-
-<p>
-Human settlements near rivers are shaped by three competing forces:
+Two rules drive the dynamics each timestep:
 </p>
 
 <ol>
-  <li><b>River attraction.</b> Settlements want to be close to the river for resources and transportation.</li>
-  <li><b>Economies of scale.</b> Settlements want to cluster together to share public goods and reduce transaction costs (the <i>bid-rent model</i> from urban economics).</li>
-  <li><b>Spatial inertia.</b> A settlement will not abandon existing functional infrastructure the moment a marginally better location appears. Relocation only happens when the environmental stress gradient exceeds a critical resistance threshold.</li>
+  <li><b>Bulldozer.</b> Settlements drowned by the migrating river are erased and regrown at the highest-utility perimeter cell.</li>
+  <li><b>Crawl.</b> The worst settlement swaps with the best empty perimeter cell, but only if the utility gain exceeds a friction threshold \(\mu\).</li>
 </ol>
 
 <p>
-The question is: what happens when you let these three rules play out on a grid while a river meanders through it? What stable patterns emerge? When do settlements jump across the river, go extinct, or sprawl outward?
+<b><a href="human-river-sim">Try the interactive simulator &rarr;</a></b>
 </p>
 
-
-<h2 id="setting-up">3. Setting Up the Model</h2>
-
-<h3 id="the-lattice">3.1 The Lattice</h3>
-
-<p>
-The model runs on a two-dimensional grid (lattice). Each cell on the grid is one of three things:
-</p>
-
-<ul>
-  <li><b>River cell</b> &mdash; <code>R(x, t) = 1</code></li>
-  <li><b>Settlement cell</b> &mdash; <code>V(x, t) = 1</code> on a floodplain cell</li>
-  <li><b>Empty floodplain</b> &mdash; <code>R = 0</code> and <code>V = 0</code></li>
-</ul>
-
-<p>
-One key rule: a settlement cell can <i>never</i> occupy the same cell as a river cell. If the river moves into a settlement, that settlement is destroyed.
-</p>
-
-<h3 id="conservation">3.2 Conservation Laws</h3>
-
-<p>
-The model assumes population is conserved &mdash; the total number of settlement cells <code>N</code> stays constant over time. If a settlement is destroyed by the river, an equivalent settlement must appear elsewhere on the floodplain. Think of it as displaced people relocating rather than disappearing.
-</p>
-
-<h3 id="utility">3.3 The Utility Field</h3>
-
-<p>
-Each floodplain cell has a <b>utility score</b> that determines how attractive it is for settlement. The utility is defined as:
-</p>
-
-<pre><code>U(x, t) = -w_d * D(x, t) + w_c * C(x, t)</code></pre>
-
-<p>Where:</p>
-<ul>
-  <li><code>D(x, t)</code> is the <b>distance to the nearest river cell</b> &mdash; farther from the river means lower utility (less access to resources).</li>
-  <li><code>C(x, t)</code> is the <b>local clustering score</b> &mdash; how many of the 8 neighboring cells (Moore neighborhood) are also settlements. More neighbors means higher utility (economies of scale).</li>
-  <li><code>w_d</code> and <code>w_c</code> are tunable coupling constants that control the relative strength of each force.</li>
-</ul>
-
-<p>
-River cells themselves have a utility of negative infinity &mdash; settlements can never occupy them.
-</p>
-
-
-<h2 id="dynamics">4. How the Simulation Runs</h2>
-
-<h3 id="geomorphic-migration">4.1 Geomorphic Migration</h3>
-
-<p>
-As the river meanders across the grid, it can invade floodplain cells that contain settlements. When this happens:
-</p>
-
-<ol>
-  <li>The settlement cell is <b>destroyed</b> (set to 0).</li>
-  <li>To conserve mass, a new settlement cell is placed at the <b>empty floodplain cell with the highest utility</b>.</li>
-</ol>
-
-<p>
-This models the real-world process of communities being displaced by flooding and relocating to the next best available location.
-</p>
-
-<h3 id="gradient-migration">4.2 Gradient-Driven Migration</h3>
-
-<p>
-Even when the river isn't destroying anything, settlements continuously try to improve their position. At each timestep, the model:
-</p>
-
-<ol>
-  <li>Finds the <b>least happy</b> settlement cell (lowest utility).</li>
-  <li>Finds the <b>best available</b> empty floodplain cell (highest utility).</li>
-  <li>Swaps them &mdash; <i>but only if</i> the utility gain exceeds a friction threshold <code>&mu;</code>.</li>
-</ol>
-
-<p>
-The friction parameter <code>&mu;</code> represents <b>spatial inertia</b> &mdash; the sunk costs of abandoning existing infrastructure. A high <code>&mu;</code> means settlements are stubborn and won't move unless conditions are dramatically better elsewhere. A low <code>&mu;</code> means settlements are highly mobile.
-</p>
-
-<p>
-The system keeps swapping until no further beneficial moves exist, reaching a stable configuration for that timestep. Then the river advances and the process repeats.
-</p>
-
-
-<h2 id="what-emerges">5. What Emerges</h2>
-
-<p>
-By varying the parameters (<code>w_d</code>, <code>w_c</code>, <code>&mu;</code>) and the dynamics (linear vs. non-linear, deterministic vs. stochastic, causally directed vs. coupled), the model explores:
-</p>
-
-<ul>
-  <li><b>Stable regimes</b> &mdash; settlements that reach a steady-state configuration relative to the river.</li>
-  <li><b>Transient regimes</b> &mdash; settlements in constant flux, never reaching equilibrium.</li>
-  <li><b>Threshold behavior</b> &mdash; sudden phase transitions such as settlements jumping across the river, urban sprawl, or settlement extinction.</li>
-</ul>
-
-<p>
-The model investigates which properties remain <i>invariant</i> across different dynamic regimes &mdash; and which ones break down.
-</p>
-
-
-<h2 id="applications">6. Applications</h2>
-
-<p>
-This model has implications for:
-</p>
-
-<ul>
-  <li><b>Urban planning</b> &mdash; understanding how cities naturally organize around shifting waterways.</li>
-  <li><b>Disaster risk mitigation</b> &mdash; predicting which settlements are most vulnerable to river migration.</li>
-  <li><b>Theoretical bounds on forecasting</b> &mdash; setting upper limits on how accurately we can predict coupled human-geomorphic systems.</li>
-</ul>
-
-<p>
-<b><a href="human-river-sim">Try the interactive simulator &rarr;</a></b><br>
-Tune the coupling weights and watch the village evolve in real time.
-</p>
-
-<p>
+<p style="font-size: 85%;">
 By Brayden Noh (Harvard, Dept. of Earth and Planetary Sciences) and Omar Wani (NYU Tandon School of Engineering).
 </p>
