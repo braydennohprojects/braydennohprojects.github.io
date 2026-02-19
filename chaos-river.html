@@ -38,14 +38,260 @@ We measure divergence between two runs using the Hamming distance \(d_H(t) = \|\
 The result is clean. With cutoffs disabled, the two trajectories remain identical &mdash; \(d_H(t) = 0\) for the entire run. With cutoffs enabled, they diverge exponentially. The video below shows this divergence in action:
 </p>
 
-<video width="100%" controls>
-  <source src="assets/chaos-river-divergence.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+<!-- Interactive Chaos-River Divergence Simulator -->
+<div id="chaos-sim" style="margin: 1em 0;">
+  <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.5em 0.8em; margin-bottom:0.5em; font-size:80%;">
+    <button id="chaos-play" style="padding:0.2em 0.8em; cursor:pointer;">&#9654; Play</button>
+    <button id="chaos-reset" style="padding:0.2em 0.8em; cursor:pointer;">Reset</button>
+    <input type="range" id="chaos-scrub" min="0" max="200" value="0" style="flex:1; min-width:120px;">
+    <label style="white-space:nowrap;">Delay: <input type="range" id="chaos-delay" min="0" max="200" value="50" style="width:60px; vertical-align:middle;"> <span id="chaos-delay-val">50</span>ms</label>
+    <label style="white-space:nowrap;">Grid:
+      <select id="chaos-grid"><option value="50">50 m</option><option value="100">100 m</option></select>
+    </label>
+    <label style="white-space:nowrap;"><input type="checkbox" id="chaos-ref" checked> Reference</label>
+  </div>
+  <div style="position:relative; line-height:0;">
+    <canvas id="chaos-canvas" width="720" height="360" style="width:100%; background:#1a1a2e; display:block;"></canvas>
+    <div id="chaos-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;font-size:90%;">Loading data&hellip;</div>
+  </div>
+  <div style="display:flex; align-items:center; gap:0.4em; margin-top:0.3em;">
+    <span style="font-size:75%; color:#767676;">0</span>
+    <canvas id="chaos-colorbar" width="200" height="12" style="max-width:200px;"></canvas>
+    <span style="font-size:75%; color:#767676;">100</span>
+    <span style="font-size:75%; color:#767676; margin-left:0.3em;">ensemble occupancy</span>
+  </div>
+  <div id="chaos-info" style="font-size:75%; color:#767676; margin-top:0.2em;">Loading&hellip;</div>
+</div>
 
 <p style="font-size: 85%; color: #767676;">
-<b>Figure 2.</b> 100 ensemble simulations between no cutoff and cutoff cases.
+<b>Figure 2.</b> Interactive Eulerian occupancy heatmap of 100 ensemble simulations with cutoffs enabled. Scrub through time to see trajectories diverge.
 </p>
+
+<script>
+(function () {
+  "use strict";
+
+  var CANVAS_W = 720, CANVAS_H = 360;
+
+  var state = {
+    data: {},
+    size: 50,
+    frame: 0,
+    playing: false,
+    timer: null,
+    delay: 50,
+    showRef: true
+  };
+
+  var canvas = document.getElementById("chaos-canvas");
+  var ctx = canvas.getContext("2d");
+  var loadingEl = document.getElementById("chaos-loading");
+
+  /* off-screen buffer for heatmap (avoids per-cell fillRect) */
+  var buf = document.createElement("canvas");
+  var bufCtx = buf.getContext("2d");
+
+  /* --- data loading --- */
+  function loadData(cellSize, cb) {
+    if (state.data[cellSize]) return cb();
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", "assets/chaos_occupancy_" + cellSize + "m.json");
+    xhr.onload = function () {
+      var json = JSON.parse(xhr.responseText);
+      /* decode base64 grids */
+      var raw = atob(json.grids);
+      var arr = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+      json.gridsArr = arr;
+      delete json.grids;
+      /* pre-build RGBA colormap LUT (101 entries × 4 bytes) */
+      var cmap = json.colormap;
+      var lut = new Uint8Array(101 * 4);
+      for (var v = 0; v <= 100; v++) {
+        lut[v * 4]     = cmap[v * 3];
+        lut[v * 4 + 1] = cmap[v * 3 + 1];
+        lut[v * 4 + 2] = cmap[v * 3 + 2];
+        lut[v * 4 + 3] = 255;
+      }
+      json.lut = lut;
+      state.data[cellSize] = json;
+      cb();
+    };
+    xhr.send();
+  }
+
+  /* --- rendering --- */
+  function renderFrame() {
+    var d = state.data[state.size];
+    if (!d) return;
+    var m = d.meta, cols = m.cols, rows = m.rows;
+    var lut = d.lut;
+    var off = state.frame * rows * cols;
+
+    /* resize off-screen buffer if needed */
+    if (buf.width !== cols || buf.height !== rows) {
+      buf.width = cols;
+      buf.height = rows;
+    }
+    var imgData = bufCtx.createImageData(cols, rows);
+    var px = imgData.data;
+
+    for (var r = 0; r < rows; r++) {
+      var srcRow = rows - 1 - r; /* flip y: row 0 in data = bottom */
+      for (var c = 0; c < cols; c++) {
+        var val = d.gridsArr[off + srcRow * cols + c];
+        var li = val * 4, di = (r * cols + c) * 4;
+        px[di] = lut[li]; px[di+1] = lut[li+1]; px[di+2] = lut[li+2]; px[di+3] = 255;
+      }
+    }
+    bufCtx.putImageData(imgData, 0, 0);
+
+    /* scale to main canvas (nearest-neighbour) */
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(buf, 0, 0, CANVAS_W, CANVAS_H);
+
+    /* reference centerline overlay */
+    if (state.showRef && d.ref_centerlines[state.frame]) {
+      var cl = d.ref_centerlines[state.frame];
+      var sx = CANVAS_W / (m.xmax - m.xmin);
+      var sy = CANVAS_H / (m.ymax - m.ymin);
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      for (var i = 0; i < cl.length; i += 2) {
+        var px2 = (cl[i] - m.xmin) * sx;
+        var py2 = CANVAS_H - (cl[i + 1] - m.ymin) * sy;
+        if (i === 0) ctx.moveTo(px2, py2); else ctx.lineTo(px2, py2);
+      }
+      ctx.stroke();
+    }
+
+    updateInfo();
+  }
+
+  function updateInfo() {
+    var d = state.data[state.size];
+    if (!d) return;
+    var m = d.meta;
+    var t = state.frame * m.step;
+    var yr = (t * m.dt_years).toFixed(1);
+    document.getElementById("chaos-info").textContent =
+      "Timestep: " + t + " / " + ((m.n_timesteps - 1) * m.step) +
+      "  |  Time: " + yr + " yr  |  Grid: " + state.size + " m";
+  }
+
+  /* --- colorbar --- */
+  function drawColorbar() {
+    var d = state.data[state.size];
+    if (!d) return;
+    var cb = document.getElementById("chaos-colorbar");
+    var cbCtx = cb.getContext("2d");
+    var w = cb.width, h = cb.height;
+    var img = cbCtx.createImageData(w, h);
+    var lut = d.lut;
+    for (var x = 0; x < w; x++) {
+      var val = Math.round(x / (w - 1) * 100);
+      var li = val * 4;
+      for (var y = 0; y < h; y++) {
+        var di = (y * w + x) * 4;
+        img.data[di] = lut[li]; img.data[di+1] = lut[li+1];
+        img.data[di+2] = lut[li+2]; img.data[di+3] = 255;
+      }
+    }
+    cbCtx.putImageData(img, 0, 0);
+  }
+
+  /* --- playback --- */
+  function step() {
+    var d = state.data[state.size];
+    if (!d) return;
+    if (state.frame < d.meta.n_timesteps - 1) {
+      state.frame++;
+      scrubEl.value = state.frame;
+      renderFrame();
+    } else {
+      pause();
+    }
+  }
+
+  function play() {
+    if (state.playing) return;
+    state.playing = true;
+    playBtn.innerHTML = "&#9646;&#9646; Pause";
+    tick();
+  }
+
+  function tick() {
+    if (!state.playing) return;
+    step();
+    if (state.playing) state.timer = setTimeout(tick, state.delay);
+  }
+
+  function pause() {
+    state.playing = false;
+    playBtn.innerHTML = "&#9654; Play";
+    if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+  }
+
+  function reset() {
+    pause();
+    state.frame = 0;
+    scrubEl.value = 0;
+    renderFrame();
+  }
+
+  /* --- controls --- */
+  var playBtn = document.getElementById("chaos-play");
+  var scrubEl = document.getElementById("chaos-scrub");
+  var delayEl = document.getElementById("chaos-delay");
+  var delayVal = document.getElementById("chaos-delay-val");
+  var gridSel = document.getElementById("chaos-grid");
+  var refChk = document.getElementById("chaos-ref");
+
+  playBtn.addEventListener("click", function () {
+    state.playing ? pause() : play();
+  });
+  document.getElementById("chaos-reset").addEventListener("click", reset);
+
+  scrubEl.addEventListener("input", function () {
+    state.frame = parseInt(this.value, 10);
+    renderFrame();
+  });
+
+  delayEl.addEventListener("input", function () {
+    state.delay = parseInt(this.value, 10);
+    delayVal.textContent = this.value;
+  });
+
+  gridSel.addEventListener("change", function () {
+    var wasPlaying = state.playing;
+    pause();
+    state.size = parseInt(this.value, 10);
+    loadData(state.size, function () {
+      drawColorbar();
+      renderFrame();
+      if (wasPlaying) play();
+    });
+  });
+
+  refChk.addEventListener("change", function () {
+    state.showRef = this.checked;
+    renderFrame();
+  });
+
+  /* --- init --- */
+  loadData(50, function () {
+    loadingEl.style.display = "none";
+    var n = state.data[50].meta.n_timesteps;
+    scrubEl.max = n - 1;
+    drawColorbar();
+    renderFrame();
+    /* preload 100m in background */
+    loadData(100, function () {});
+  });
+})();
+</script>
 
 <p>
 The Lyapunov exponent converges with grid refinement, is insensitive to perturbation magnitude, and is consistent across different initial planforms. It scales with migration rate but is invariant to the cutoff threshold. In short: cutoffs alone are sufficient for chaos, and they impose a finite predictability horizon on river planform evolution.
