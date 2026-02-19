@@ -10,9 +10,8 @@ title:  Earthquakes to Topography
 <h1>Earthquake Cycles to Topography</h1>
 
 <p>
-This simulator models topographic evolution over a planar reverse fault using the stream power equation:
-$$ \frac{\partial z}{\partial t} = U(x, t) - K A^m \left| \frac{\partial z}{\partial x} \right|^n $$
-Uplift \(U(x,t)\) is partitioned into steady <b>interseismic creeping</b> (deep fault) and sudden <b>coseismic rupture</b> (shallow fault) driven by the accumulated slip deficit. Adjust the cycle time to see how earthquake frequency and magnitude affect terrace formation.
+This simulator models topographic evolution over a planar reverse fault using the stream power equation.
+Uplift is partitioned into steady <b>interseismic creeping</b> (deep fault) and sudden <b>coseismic rupture</b> (shallow fault) driven by the accumulated slip deficit. Adjust the cycle time to see how earthquake frequency and magnitude affect terrace formation.
 </p>
 
 <style>
@@ -56,7 +55,7 @@ Uplift \(U(x,t)\) is partitioned into steady <b>interseismic creeping</b> (deep 
   <div class="sliders-container">
     <div class="slider-group">
       <label for="sl-interval">Earthquake Cycle (Slip Deficit):</label>
-      <input id="sl-interval" type="range" min="0" max="1010" step="10" value="100">
+      <input id="sl-interval" type="range" min="0" max="10010" step="10" value="100">
       <div class="slider-val" id="val-interval">100 yr</div>
     </div>
     <div class="slider-group">
@@ -383,13 +382,6 @@ function renderFault(eqFlash) {
   var yTicks = [-5, -4, -3, -2, -1, 0];
   drawAxes(ctxFault, t, "Distance from MFT (km)", "Depth (km)", [0, 2, 4, 6, 8, 10], yTicks);
 
-  ctxFault.strokeStyle = "rgba(0,0,0,0.15)";
-  ctxFault.lineWidth = 1;
-  ctxFault.beginPath();
-  ctxFault.moveTo(t.toCanvasX(0), t.toCanvasY(0));
-  ctxFault.lineTo(t.toCanvasX(10), t.toCanvasY(0));
-  ctxFault.stroke();
-
   var colorActive = "#e74c3c", colorInactive = "#95a5a6";
   var widthActive = 3.5, widthInactive = 1.5;
 
@@ -423,13 +415,6 @@ function renderFault(eqFlash) {
   }
   ctxFault.stroke();
 
-  // Phase Label
-  var phaseText = eqFlash ? "Phase: Coseismic Rupture (Earthquake!)" : "Phase: Interseismic Creep";
-  ctxFault.textAlign = "right";
-  ctxFault.textBaseline = "top";
-  ctxFault.font = "bold 13px sans-serif";
-  ctxFault.fillStyle = eqFlash ? "#e74c3c" : "#34495e";
-  ctxFault.fillText(phaseText, t.toCanvasX(9.8), t.toCanvasY(0.4));
 }
 
 /* ================================================================
@@ -454,7 +439,7 @@ function doStep() {
     for (var i = 1; i < NX; i++) {
       topoZ[i] += (upliftRed[i] + upliftBlue[i]) * DT;
     }
-  } else if (eqInterval > 1000) {
+  } else if (eqInterval > 10000) {
     // NEVER: only interseismic, coseismic never releases
     for (var i = 1; i < NX; i++) {
       topoZ[i] += upliftRed[i] * DT;
@@ -496,7 +481,7 @@ function updateInfo() {
   infoEq.textContent = eqCount;
   if (eqInterval === 0) {
     infoNext.textContent = "N/A";
-  } else if (eqInterval > 1000) {
+  } else if (eqInterval > 10000) {
     infoNext.textContent = "Never";
   } else {
     infoNext.textContent = Math.max(0, eqInterval - timeSinceLastEq);
@@ -556,7 +541,7 @@ btnReset.addEventListener("click", reset);
 
 function intervalLabel(v) {
   if (v === 0) return "Steady State";
-  if (v > 1000) return "Never";
+  if (v > 10000) return "Never";
   return v + " yr";
 }
 
