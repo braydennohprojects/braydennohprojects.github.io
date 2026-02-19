@@ -7,4 +7,563 @@ title:  Earthquakes to Topography
 <a href="index.html">Brayden Noh</a>
 </p>
 
-<h1>Earthquakes to Topography</h1>
+<h1>Earthquake Cycles to Topography</h1>
+
+<p>
+This simulator models topographic evolution over a listric reverse fault using the stream power equation:
+$$ \frac{\partial z}{\partial t} = U(x, t) - K A^m \left| \frac{\partial z}{\partial x} \right|^n $$
+Uplift \(U(x,t)\) is partitioned into steady <b>interseismic creeping</b> (deep fault) and sudden <b>coseismic rupture</b> (shallow fault) driven by the accumulated slip deficit. Adjust the cycle time to see how earthquake frequency and magnitude affect terrace formation.
+</p>
+
+<style>
+  .controls {
+    display: flex; align-items: flex-start; gap: 20px; margin-bottom: 20px;
+    padding: 15px 20px; background: #f1f3f5; border-radius: 6px;
+  }
+  .button-group {
+    display: flex; gap: 8px; margin-top: 5px;
+  }
+  .controls button {
+    padding: 8px 16px; border: none; border-radius: 4px;
+    background: #3498db; color: #fff; font-weight: bold; cursor: pointer; transition: 0.2s;
+  }
+  .controls button:hover:not(:disabled) { background: #2980b9; }
+  .controls button:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+  .sliders-container {
+    display: flex; flex-direction: column; gap: 12px; flex: 1;
+  }
+  .slider-group { display: flex; align-items: center; gap: 12px; }
+  .slider-group label { font-weight: 600; font-size: 14px; color: #2c3e50; min-width: 220px; }
+  .slider-group input { flex: 1; cursor: pointer; }
+  .slider-val { font-family: monospace; font-size: 14px; font-weight: bold; color: #e74c3c; width: 60px; text-align: right; }
+
+  .info-bar {
+    display: flex; gap: 25px; font-size: 14px; color: #555;
+    margin-bottom: 15px; font-weight: 500; border-bottom: 1px solid #eee; padding-bottom: 10px;
+  }
+  .info-bar span strong { color: #2980b9; font-family: monospace; font-size: 15px; }
+  .plot-title { font-size: 14px; font-weight: 600; color: #34495e; margin: 15px 0 5px 0; }
+  #sim-container canvas { width: 100%; height: auto; display: block; }
+</style>
+
+<div class="controls">
+  <div class="button-group">
+    <button id="btn-play">Play</button>
+    <button id="btn-pause" disabled>Pause</button>
+    <button id="btn-reset">Reset</button>
+  </div>
+  <div class="sliders-container">
+    <div class="slider-group">
+      <label for="sl-interval">Earthquake Cycle (Slip Deficit):</label>
+      <input id="sl-interval" type="range" min="10" max="1000" step="10" value="100">
+      <div class="slider-val" id="val-interval">100 yr</div>
+    </div>
+    <div class="slider-group">
+      <label for="sl-speed">Simulation Speed:</label>
+      <input id="sl-speed" type="range" min="1" max="50" step="1" value="5">
+      <div class="slider-val" id="val-speed">5x</div>
+    </div>
+  </div>
+</div>
+
+<div class="info-bar">
+  <span>Time: <strong id="info-time">0</strong> yr</span>
+  <span>Earthquakes: <strong id="info-eq">0</strong></span>
+  <span>Next EQ in: <strong id="info-next">100</strong> yr</span>
+  <span>Max Elevation: <strong id="info-maxz">0.0</strong> m</span>
+</div>
+
+<div id="sim-container">
+  <div class="plot-title">Topography Evolution</div>
+  <canvas id="canvas-topo"></canvas>
+
+  <div class="plot-title">Fault Geometry &amp; Activity</div>
+  <canvas id="canvas-fault"></canvas>
+</div>
+
+<script>
+(function () {
+"use strict";
+
+/* ================================================================
+   Section 0: Precomputed Data & Constants
+   ================================================================ */
+var UPLIFT_RED_PREFIX = [4.903803,0.503061,0.585355,0.687586,0.815781,0.977778,1.183329,1.443325,1.766736,2.152639,2.574868,2.964087,3.211734,3.202921,2.944753,2.554021,2.134166,1.751374,1.43073,1.172952,0.969229,0.808673,0.681631,0.580335,0.498808,0.432547];
+var UPLIFT_BLUE_PREFIX = [4.031492,8.279776,7.936924,7.453386,6.557559,4.471381,1.717241,0.180648,-0.790311,-1.536722,-2.177928,-2.705868,-3.042111,-3.090388,-2.869678,-2.503998,-2.100648,-1.728915,-1.415724,-1.162969,-0.96254,-0.804191,-0.678628,-0.578322,-0.49746,-0.431634];
+
+var FAULT_X = [0.0,0.1001,0.2002,0.3003,0.4004,0.5005,0.6006,0.7007,0.8008,0.9009,1.001,1.1011,1.2012,1.3013,1.4014,1.5015,1.6016,1.7017,1.8018,1.9019,2.002,2.1021,2.2022,2.3023,2.4024,2.5025,2.6026,2.7027,2.8028,2.9029,3.003,3.1031,3.2032,3.3033,3.4034,3.5035,3.6036,3.7037,3.8038,3.9039,4.004,4.1041,4.2042,4.3043,4.4044,4.5045,4.6046,4.7047,4.8048,4.9049,5.005,5.1051,5.2052,5.3053,5.4054,5.5055,5.6056,5.7057,5.8058,5.9059,6.006,6.1061,6.2062,6.3063,6.4064,6.5065,6.6066,6.7067,6.8068,6.9069,7.007,7.1071,7.2072,7.3073,7.4074,7.5075,7.6076,7.7077,7.8078,7.9079,8.008,8.1081,8.2082,8.3083,8.4084,8.5085,8.6086,8.7087,8.8088,8.9089,9.009,9.1091,9.2092,9.3093,9.4094,9.5095,9.6096,9.7097,9.8098,9.9099];
+var FAULT_Z = [0.0,-0.1905,-0.3629,-0.5188,-0.6599,-0.7875,-0.903,-1.0075,-1.1021,-1.1876,-1.265,-1.335,-1.3983,-1.4556,-1.5075,-1.5544,-1.5969,-1.6353,-1.67,-1.7014,-1.7299,-1.7556,-1.7789,-1.7999,-1.819,-1.8362,-1.8518,-1.866,-1.8787,-1.8903,-1.9007,-1.9102,-1.9187,-1.9265,-1.9335,-1.9398,-1.9455,-1.9507,-1.9554,-1.9597,-1.9635,-1.967,-1.9701,-1.973,-1.9756,-1.9779,-1.98,-1.9819,-1.9836,-1.9852,-1.9866,-1.9879,-1.989,-1.9901,-1.991,-1.9919,-1.9926,-1.9933,-1.994,-1.9946,-1.9951,-1.9955,-1.996,-1.9964,-1.9967,-1.997,-1.9973,-1.9976,-1.9978,-1.998,-1.9982,-1.9984,-1.9985,-1.9987,-1.9988,-1.9989,-1.999,-1.9991,-1.9992,-1.9993,-1.9993,-1.9994,-1.9995,-1.9995,-1.9996,-1.9996,-1.9996,-1.9997,-1.9997,-1.9997,-1.9998,-1.9998,-1.9998,-1.9998,-1.9998,-1.9999,-1.9999,-1.9999,-1.9999,-1.9999];
+var FAULT_ACTIVE_CUT = 50;
+
+var NX = 501;
+var X_END = 10.0; // km
+var DX = X_END / (NX - 1); // 0.02 km
+var K = 1e-4;
+var M_EXP = 0.5;
+var N_EXP = 1.0;
+var H_EXP = 1.67;
+var DT = 1; // 1 year per step
+var STEPS_PER_FRAME = 5; // Default speed multiplier
+
+// Linear interpolator to map sparse uplift arrays to dense grid
+function interpolate(x, x_arr, y_arr) {
+    if (x <= x_arr[0]) return y_arr[0];
+    if (x >= x_arr[x_arr.length - 1]) return y_arr[y_arr.length - 1];
+    for (var i = 0; i < x_arr.length - 1; i++) {
+        if (x >= x_arr[i] && x <= x_arr[i+1]) {
+            var t = (x - x_arr[i]) / (x_arr[i+1] - x_arr[i]);
+            return y_arr[i] + t * (y_arr[i+1] - y_arr[i]);
+        }
+    }
+    return 0;
+}
+
+var x_coarse = [];
+for(var i = 0; i <= 25; i++) { x_coarse.push(i * 0.4); }
+
+// Build dense uplift arrays
+var upliftRed = new Float64Array(NX);
+var upliftBlue = new Float64Array(NX);
+var xGrid = new Float64Array(NX);
+var DA = new Float64Array(NX);
+
+for (var i = 0; i < NX; i++) {
+  xGrid[i] = i * DX;
+  upliftRed[i]  = interpolate(xGrid[i], x_coarse, UPLIFT_RED_PREFIX) * 1e-6; // km/yr
+  upliftBlue[i] = interpolate(xGrid[i], x_coarse, UPLIFT_BLUE_PREFIX) * 1e-6; // km/yr
+
+  var Lx = X_END - xGrid[i];
+  DA[i] = Lx > 0 ? Math.pow(Lx, H_EXP) : 0;
+}
+
+/* ================================================================
+   Section 1: DOM Refs & Canvas Setup
+   ================================================================ */
+var canvasTopo  = document.getElementById("canvas-topo");
+var canvasFault = document.getElementById("canvas-fault");
+var DPR = window.devicePixelRatio || 1;
+
+function initCanvas(canvas, w, h) {
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    canvas.width = w * DPR;
+    canvas.height = h * DPR;
+    var ctx = canvas.getContext("2d");
+    ctx.scale(DPR, DPR);
+    return ctx;
+}
+
+var ctxTopo = initCanvas(canvasTopo, 840, 260);
+var ctxFault = initCanvas(canvasFault, 840, 200);
+
+var btnPlay  = document.getElementById("btn-play");
+var btnPause = document.getElementById("btn-pause");
+var btnReset = document.getElementById("btn-reset");
+var slInterval = document.getElementById("sl-interval");
+var valInterval = document.getElementById("val-interval");
+var slSpeed = document.getElementById("sl-speed");
+var valSpeed = document.getElementById("val-speed");
+var infoTime = document.getElementById("info-time");
+var infoMaxZ = document.getElementById("info-maxz");
+var infoEq   = document.getElementById("info-eq");
+var infoNext = document.getElementById("info-next");
+
+/* ================================================================
+   Section 2: TVD Solver & Utilities
+   ================================================================ */
+
+function getNiceTicks(min, max, numTicks) {
+    var range = max - min;
+    if (range === 0) return [min];
+    var step = Math.pow(10, Math.floor(Math.log10(range / numTicks)));
+    var err = numTicks / (range / step);
+    if (err <= .15) step *= 10;
+    else if (err <= .35) step *= 5;
+    else if (err <= .75) step *= 2;
+    var ticks = [];
+    var start = Math.ceil(min / step) * step;
+    for (var val = start; val <= max + 1e-9; val += step) {
+        ticks.push(parseFloat(val.toPrecision(10)));
+    }
+    return ticks;
+}
+
+function fillDepressions(z) {
+  // Forces elevation to be monotonically increasing from left to right
+  var max_val = z[0];
+  for (var i = 1; i < z.length; i++) {
+    if (z[i] < max_val) {
+        z[i] = max_val;
+    } else {
+        max_val = z[i];
+    }
+  }
+}
+
+function tvdErosionStep(z, dx, dtMacro, Ke, m, n, DA, cfl) {
+    var nx = z.length;
+    var a = new Float64Array(nx);
+
+    // Wave speed a = K * A^m * (dz/dx)^{n-1}
+    // Wave travels left to right (a > 0)
+    for (var i = 0; i < nx; i++) {
+        var slope = (i < nx - 1) ? ((z[i+1] - z[i]) / dx) : ((z[i] - z[i-1]) / dx);
+        if (slope < 0) slope = 0;
+
+        var c = Ke * Math.pow(Math.max(DA[i], 1e-12), m);
+        if (n !== 1.0) c = c * Math.pow(slope, n - 1.0);
+        a[i] = c;
+    }
+
+    var a_max = 0;
+    for (var i = 0; i < nx; i++) { if (a[i] > a_max) a_max = a[i]; }
+
+    var dt_sub = dtMacro;
+    if (a_max > 0) {
+        var dt_allow = cfl * dx / a_max;
+        if (dt_allow < dt_sub) dt_sub = dt_allow;
+    }
+
+    var steps = Math.ceil(dtMacro / dt_sub);
+    dt_sub = dtMacro / steps;
+
+    var z_new = new Float64Array(nx);
+    var r = new Float64Array(nx);
+    var phi = new Float64Array(nx);
+
+    for (var s = 0; s < steps; s++) {
+        for (var i = 0; i < nx; i++) {
+            var dz_local = (i < nx - 1) ? (z[i+1] - z[i]) : 0;
+            var dz_up = (i > 0) ? (z[i] - z[i-1]) : 0;
+            if (Math.abs(dz_local) > 1e-12) r[i] = dz_up / dz_local;
+            else r[i] = 1.0;
+        }
+
+        for (var i = 0; i < nx; i++) {
+            phi[i] = (r[i] + Math.abs(r[i])) / (1.0 + Math.abs(r[i]));
+        }
+
+        for (var i = 1; i < nx - 1; i++) {
+            var a_val = a[i];
+            var z_val = z[i];
+            var zr_val = z[i+1];
+            var zl_val = z[i-1];
+
+            var phi_R = phi[i];     // limiter at i+1/2
+            var phi_L = phi[i-1];   // limiter at i-1/2
+
+            var Fr_low = a_val * z_val;
+            var Fr_high = 0.5 * a_val * (z_val + zr_val) - 0.5 * a_val * a_val * (dt_sub / dx) * (zr_val - z_val);
+            var Fr = Fr_low + phi_R * (Fr_high - Fr_low);
+
+            var Fl_low = a_val * zl_val;
+            var Fl_high = 0.5 * a_val * (zl_val + z_val) - 0.5 * a_val * a_val * (dt_sub / dx) * (z_val - zl_val);
+            var Fl = Fl_low + phi_L * (Fl_high - Fl_low);
+
+            z_new[i] = z[i] - (dt_sub / dx) * (Fr - Fl);
+        }
+        z_new[0] = 0.0;
+        z_new[nx-1] = z[nx-1]; // Divide accumulates uplift freely
+
+        for (var i = 0; i < nx; i++) z[i] = Math.max(0, z_new[i]);
+    }
+    return z;
+}
+
+/* ================================================================
+   Section 3: Plot Rendering (Matplotlib-style)
+   ================================================================ */
+var PAD = { left: 60, right: 20, top: 20, bottom: 40 };
+
+function makePlotTransform(cw, ch, xMin, xMax, yMin, yMax) {
+  var pw = cw - PAD.left - PAD.right;
+  var ph = ch - PAD.top - PAD.bottom;
+  return {
+    xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax, pw: pw, ph: ph,
+    toCanvasX: function (x) { return PAD.left + (x - xMin) / (xMax - xMin) * pw; },
+    toCanvasY: function (y) { return PAD.top + (1 - (y - yMin) / (yMax - yMin)) * ph; }
+  };
+}
+
+function drawAxes(ctx, t, xLabel, yLabel, xTicks, yTicks, yTickLabels) {
+    if (!yTickLabels) yTickLabels = yTicks;
+
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+
+    var x0 = t.toCanvasX(t.xMin);
+    var x1 = t.toCanvasX(t.xMax);
+    var y0 = t.toCanvasY(t.yMin);
+    var y1 = t.toCanvasY(t.yMax);
+
+    ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); // X axis
+    ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); // Y axis
+    ctx.stroke();
+
+    ctx.fillStyle = "#333";
+    ctx.font = "12px sans-serif";
+
+    // X ticks
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    for(var i=0; i<xTicks.length; i++) {
+        var x = xTicks[i];
+        var cx = t.toCanvasX(x);
+        ctx.beginPath(); ctx.moveTo(cx, y0); ctx.lineTo(cx, y0+5); ctx.stroke();
+        ctx.fillText(x, cx, y0+8);
+    }
+    ctx.fillText(xLabel, (x0+x1)/2, y0 + 25);
+
+    // Y ticks
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    for(var i=0; i<yTicks.length; i++) {
+        var y = yTicks[i];
+        var lbl = yTickLabels[i];
+        var cy = t.toCanvasY(y);
+        ctx.beginPath(); ctx.moveTo(x0, cy); ctx.lineTo(x0-5, cy); ctx.stroke();
+        ctx.fillText(lbl, x0-8, cy);
+    }
+
+    ctx.save();
+    ctx.translate(x0 - 45, (y0+y1)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.textAlign = "center";
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+}
+
+function renderTopo(topoZ, rawZ) {
+  var cw = canvasTopo.width / DPR, ch = canvasTopo.height / DPR;
+
+  var zMax = 0;
+  for (var i = 0; i < NX; i++) { if (topoZ[i] > zMax) zMax = topoZ[i]; }
+  zMax = Math.max(zMax, 0.005) * 1.2; // Min 6 meters dynamic scale
+  var zMin = 0;
+
+  var t = makePlotTransform(cw, ch, 0, X_END, zMin, zMax);
+  ctxTopo.clearRect(0, 0, cw, ch);
+
+  var yTicksKm = getNiceTicks(zMin, zMax, 4);
+  var yTicksM = yTicksKm.map(function(y) { return (y * 1000).toFixed(1); });
+
+  drawAxes(ctxTopo, t, "Distance from MFT (km)", "Elevation (m)", [0, 2, 4, 6, 8, 10], yTicksKm, yTicksM);
+
+  // Terrain Fill (Gray)
+  ctxTopo.fillStyle = "rgba(180, 180, 180, 0.5)";
+  ctxTopo.beginPath();
+  ctxTopo.moveTo(t.toCanvasX(xGrid[0]), t.toCanvasY(0));
+  for (var i = 0; i < NX; i++) {
+    ctxTopo.lineTo(t.toCanvasX(xGrid[i]), t.toCanvasY(topoZ[i]));
+  }
+  ctxTopo.lineTo(t.toCanvasX(xGrid[NX - 1]), t.toCanvasY(0));
+  ctxTopo.closePath();
+  ctxTopo.fill();
+
+  // Lake fill overlay (blue fill to indicate fill areas)
+  if (rawZ) {
+    ctxTopo.fillStyle = "rgba(41, 128, 185, 0.6)";
+    ctxTopo.beginPath();
+    ctxTopo.moveTo(t.toCanvasX(xGrid[0]), t.toCanvasY(topoZ[0]));
+    for (var i = 1; i < NX; i++) {
+      ctxTopo.lineTo(t.toCanvasX(xGrid[i]), t.toCanvasY(topoZ[i]));
+    }
+    for (var i = NX - 1; i >= 0; i--) {
+      ctxTopo.lineTo(t.toCanvasX(xGrid[i]), t.toCanvasY(rawZ[i]));
+    }
+    ctxTopo.closePath();
+    ctxTopo.fill();
+  }
+
+  // Topographic Line (Black)
+  ctxTopo.strokeStyle = "#000000";
+  ctxTopo.lineWidth = 2;
+  ctxTopo.beginPath();
+  for (var i = 0; i < NX; i++) {
+    var px = t.toCanvasX(xGrid[i]);
+    var py = t.toCanvasY(topoZ[i]);
+    if (i === 0) ctxTopo.moveTo(px, py); else ctxTopo.lineTo(px, py);
+  }
+  ctxTopo.stroke();
+}
+
+function renderFault(eqFlash) {
+  var cw = canvasFault.width / DPR, ch = canvasFault.height / DPR;
+  var t = makePlotTransform(cw, ch, 0, 10, -2.5, 0.5);
+
+  ctxFault.clearRect(0, 0, cw, ch);
+
+  var yTicks = [-2.0, -1.5, -1.0, -0.5, 0];
+  drawAxes(ctxFault, t, "Distance from MFT (km)", "Depth (km)", [0, 2, 4, 6, 8, 10], yTicks);
+
+  ctxFault.strokeStyle = "rgba(0,0,0,0.15)";
+  ctxFault.lineWidth = 1;
+  ctxFault.beginPath();
+  ctxFault.moveTo(t.toCanvasX(0), t.toCanvasY(0));
+  ctxFault.lineTo(t.toCanvasX(10), t.toCanvasY(0));
+  ctxFault.stroke();
+
+  var colorActive = "#e74c3c", colorInactive = "#95a5a6";
+  var widthActive = 3.5, widthInactive = 1.5;
+
+  var colorShallow = eqFlash ? colorActive : colorInactive;
+  var widthShallow = eqFlash ? widthActive : widthInactive;
+
+  var colorDeep = (!eqFlash) ? colorActive : colorInactive;
+  var widthDeep = (!eqFlash) ? widthActive : widthInactive;
+
+  // Draw Deep (Creeping)
+  ctxFault.strokeStyle = colorDeep;
+  ctxFault.lineWidth = widthDeep;
+  ctxFault.beginPath();
+  for (var i = FAULT_ACTIVE_CUT; i < FAULT_X.length; i++) {
+    var cx = t.toCanvasX(FAULT_X[i]);
+    var cy = t.toCanvasY(FAULT_Z[i]);
+    if (i === FAULT_ACTIVE_CUT) ctxFault.moveTo(cx, cy);
+    else ctxFault.lineTo(cx, cy);
+  }
+  ctxFault.stroke();
+
+  // Draw Shallow (Locked)
+  ctxFault.strokeStyle = colorShallow;
+  ctxFault.lineWidth = widthShallow;
+  ctxFault.beginPath();
+  for (var i = 0; i <= FAULT_ACTIVE_CUT; i++) {
+    var cx = t.toCanvasX(FAULT_X[i]);
+    var cy = t.toCanvasY(FAULT_Z[i]);
+    if (i === 0) ctxFault.moveTo(cx, cy);
+    else ctxFault.lineTo(cx, cy);
+  }
+  ctxFault.stroke();
+
+  // Phase Label
+  var phaseText = eqFlash ? "Phase: Coseismic Rupture (Earthquake!)" : "Phase: Interseismic Creep";
+  ctxFault.textAlign = "right";
+  ctxFault.textBaseline = "top";
+  ctxFault.font = "bold 13px sans-serif";
+  ctxFault.fillStyle = eqFlash ? "#e74c3c" : "#34495e";
+  ctxFault.fillText(phaseText, t.toCanvasX(9.8), t.toCanvasY(0.4));
+}
+
+/* ================================================================
+   Section 4: Simulation State & Loop
+   ================================================================ */
+var topoZ = new Float64Array(NX);
+var rawZ  = new Float64Array(NX);
+var simTime = 0;
+var eqCount = 0;
+var timeSinceLastEq = 0;
+var eqFlashFrames = 0;
+var playing = false;
+var animFrameId = null;
+
+function getInterval() { return parseInt(slInterval.value); }
+
+function doStep() {
+  var eqInterval = getInterval();
+
+  // 1. Interseismic Uplift
+  for (var i = 1; i < NX; i++) {
+    topoZ[i] += upliftRed[i] * DT;
+  }
+
+  // 2. Check Earthquake Trigger
+  timeSinceLastEq += DT;
+  if (timeSinceLastEq >= eqInterval) {
+    for (var i = 1; i < NX; i++) {
+      topoZ[i] += upliftBlue[i] * eqInterval;
+    }
+    timeSinceLastEq = 0;
+    eqCount++;
+    eqFlashFrames = 15;
+  }
+
+  // 3. Fluvial Erosion (TVD Step)
+  topoZ = tvdErosionStep(topoZ, DX, DT, K, M_EXP, N_EXP, DA, 0.9);
+
+  // 4. Save Raw Z and Fill Depressions
+  for (var i = 0; i < NX; i++) { rawZ[i] = topoZ[i]; }
+  fillDepressions(topoZ);
+
+  simTime += DT;
+}
+
+function updateInfo() {
+  var eqInterval = getInterval();
+  infoTime.textContent = simTime;
+  var maxZ = 0;
+  for (var i = 0; i < NX; i++) if (topoZ[i] > maxZ) maxZ = topoZ[i];
+  infoMaxZ.textContent = (maxZ * 1000).toFixed(2);
+  infoEq.textContent = eqCount;
+  infoNext.textContent = Math.max(0, eqInterval - timeSinceLastEq);
+}
+
+function animate() {
+  if (!playing) return;
+
+  for (var s = 0; s < STEPS_PER_FRAME; s++) {
+    doStep();
+  }
+
+  var flash = eqFlashFrames > 0;
+  if (eqFlashFrames > 0) eqFlashFrames--;
+
+  renderTopo(topoZ, rawZ);
+  renderFault(flash);
+  updateInfo();
+
+  animFrameId = requestAnimationFrame(animate);
+}
+
+function play() {
+  playing = true;
+  btnPlay.disabled = true;
+  btnPause.disabled = false;
+  animFrameId = requestAnimationFrame(animate);
+}
+
+function pause() {
+  playing = false;
+  btnPlay.disabled = false;
+  btnPause.disabled = true;
+  if (animFrameId) cancelAnimationFrame(animFrameId);
+}
+
+function reset() {
+  pause();
+  simTime = 0;
+  eqCount = 0;
+  timeSinceLastEq = 0;
+  eqFlashFrames = 0;
+  topoZ = new Float64Array(NX);
+  rawZ  = new Float64Array(NX);
+  renderTopo(topoZ, rawZ);
+  renderFault(false);
+  updateInfo();
+}
+
+/* ================================================================
+   Section 5: Wiring & Initial Render
+   ================================================================ */
+btnPlay.addEventListener("click", play);
+btnPause.addEventListener("click", pause);
+btnReset.addEventListener("click", reset);
+
+slInterval.addEventListener("input", function () {
+  valInterval.textContent = slInterval.value + " yr";
+  updateInfo();
+});
+
+slSpeed.addEventListener("input", function () {
+  valSpeed.textContent = slSpeed.value + "x";
+  STEPS_PER_FRAME = parseInt(slSpeed.value);
+});
+
+renderTopo(topoZ, rawZ);
+renderFault(false);
+updateInfo();
+
+})();
+</script>
