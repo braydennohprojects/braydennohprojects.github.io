@@ -500,15 +500,15 @@ function renderFault(eqFlash) {
   var eqInterval = getInterval();
   var allActive = (eqInterval === 0);
 
-  // Shallow (0 to faultCut): normally CREEPING (red)
-  var colorShallow = allActive ? colorActive : ((!eqFlash) ? colorActive : colorInactive);
-  var widthShallow = allActive ? widthActive : ((!eqFlash) ? widthActive : widthInactive);
+  // Shallow (0 to faultCut): normally LOCKED (gray), flashes red during EQ
+  var colorShallow = allActive ? colorActive : (eqFlash ? colorActive : colorInactive);
+  var widthShallow = allActive ? widthActive : (eqFlash ? widthActive : widthInactive);
 
-  // Deep (faultCut to end): normally LOCKED (gray), flashes red during EQ
-  var colorDeep = allActive ? colorActive : (eqFlash ? colorActive : colorInactive);
-  var widthDeep = allActive ? widthActive : (eqFlash ? widthActive : widthInactive);
+  // Deep (faultCut to end): normally CREEPING (red)
+  var colorDeep = allActive ? colorActive : ((!eqFlash) ? colorActive : colorInactive);
+  var widthDeep = allActive ? widthActive : ((!eqFlash) ? widthActive : widthInactive);
 
-  // Draw Shallow (Creeping)
+  // Draw Shallow (Locked)
   ctxFault.strokeStyle = colorShallow;
   ctxFault.lineWidth = widthShallow;
   ctxFault.beginPath();
@@ -520,7 +520,7 @@ function renderFault(eqFlash) {
   }
   ctxFault.stroke();
 
-  // Draw Deep (Locked)
+  // Draw Deep (Creeping)
   ctxFault.strokeStyle = colorDeep;
   ctxFault.lineWidth = widthDeep;
   ctxFault.beginPath();
