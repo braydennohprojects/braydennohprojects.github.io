@@ -465,6 +465,8 @@ function onMove(e) {
     if (dataX >= xctrl[dragIdx + 1] - margin) dataX = xctrl[dragIdx + 1] - margin;
   }
 
+  if (dataZ > 0) dataZ = 0;
+
   xctrl[dragIdx] = dataX;
   zctrl[dragIdx] = dataZ;
 
@@ -491,8 +493,7 @@ function renderFault() {
   drawPlot(ctxFault, cw, ch, {
     transform: faultTr,
     fill: { x: xGrid, y: faultZ, color: "rgba(8,69,148,0.08)", base: "bottom" },
-    lines: [{ x: xGrid, y: faultZ, color: "#084594", width: 2 }],
-    nodes: { x: xctrl, y: zctrl }
+    lines: [{ x: xGrid, y: faultZ, color: "#084594", width: 2 }]
   });
 
   // Surface reference line at z=0
@@ -503,7 +504,7 @@ function renderFault() {
   ctxFault.lineTo(faultTr.toCanvasX(X_END), faultTr.toCanvasY(0));
   ctxFault.stroke();
 
-  // Axial planes: dashed lines from kink to surface intersection
+  // Axial planes: dashed lines from kink to surface intersection (drawn before dots)
   ctxFault.setLineDash([4, 3]);
   ctxFault.strokeStyle = "#6baed6";
   ctxFault.lineWidth = 1;
@@ -516,11 +517,19 @@ function renderFault() {
   }
   ctxFault.setLineDash([]);
 
-  // Dots at surface intersections
+  // Dots at surface intersections (on top of dashed lines)
   for (var ai = 0; ai < axialData.length; ai++) {
     ctxFault.beginPath();
     ctxFault.arc(faultTr.toCanvasX(axialData[ai].xSurf), faultTr.toCanvasY(0), 3, 0, 2 * Math.PI);
     ctxFault.fillStyle = "#6baed6";
+    ctxFault.fill();
+  }
+
+  // Fault control nodes (on top of everything)
+  for (var ni = 0; ni < xctrl.length; ni++) {
+    ctxFault.beginPath();
+    ctxFault.arc(faultTr.toCanvasX(xctrl[ni]), faultTr.toCanvasY(zctrl[ni]), 5, 0, 2 * Math.PI);
+    ctxFault.fillStyle = "#084594";
     ctxFault.fill();
   }
 }
