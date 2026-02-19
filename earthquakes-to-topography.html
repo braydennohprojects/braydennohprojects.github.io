@@ -485,6 +485,16 @@ function renderFault(eqFlash) {
   var yTicks = [-20, -15, -10, -5, 0];
   drawAxes(ctxFault, t, "Distance from MFT (km)", "Depth (km)", [0, 20, 40, 60, 80, 100], yTicks);
 
+  // z=0 dashed line
+  ctxFault.strokeStyle = "#ccc";
+  ctxFault.lineWidth = 1;
+  ctxFault.setLineDash([4, 4]);
+  ctxFault.beginPath();
+  ctxFault.moveTo(t.toCanvasX(0), t.toCanvasY(0));
+  ctxFault.lineTo(t.toCanvasX(100), t.toCanvasY(0));
+  ctxFault.stroke();
+  ctxFault.setLineDash([]);
+
   var colorActive = "#e74c3c", colorInactive = "#95a5a6";
   var widthActive = 3.5, widthInactive = 1.5;
 
