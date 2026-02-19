@@ -65,8 +65,8 @@ Uplift is partitioned into steady <b>interseismic creeping</b> (shallow fault) a
     </div>
     <div class="slider-group">
       <label for="sl-speed">Simulation Speed:</label>
-      <input id="sl-speed" type="range" min="1" max="50" step="1" value="5">
-      <div class="slider-val" id="val-speed">5x</div>
+      <input id="sl-speed" type="range" min="1" max="200" step="1" value="20">
+      <div class="slider-val" id="val-speed">20x</div>
     </div>
   </div>
 </div>
@@ -121,7 +121,7 @@ var M_EXP = 0.3;
 var N_EXP = 1.0;
 var H_EXP = 1.67;
 var DT = 1; // 1 year per step
-var STEPS_PER_FRAME = 5;
+var STEPS_PER_FRAME = 20;
 
 var upliftRed = new Float64Array(NX);
 var upliftBlue = new Float64Array(NX);
@@ -354,13 +354,13 @@ function renderTopo(topoZ, rawZ) {
   zMax = Math.max(zMax, 0.005) * 1.2;
   var zMin = 0;
 
-  var t = makePlotTransform(cw, ch, 0, X_END, zMin, zMax);
+  var t = makePlotTransform(cw, ch, 0, 100, zMin, zMax);
   ctxTopo.clearRect(0, 0, cw, ch);
 
   var yTicksKm = getNiceTicks(zMin, zMax, 4);
   var yTicksM = yTicksKm.map(function(y) { return (y * 1000).toFixed(1); });
 
-  drawAxes(ctxTopo, t, "Distance from MFT (km)", "Elevation (m)", [0, 50, 100, 150, 200], yTicksKm, yTicksM);
+  drawAxes(ctxTopo, t, "Distance from MFT (km)", "Elevation (m)", [0, 20, 40, 60, 80, 100], yTicksKm, yTicksM);
 
   // Terrain Fill (Gray)
   ctxTopo.fillStyle = "rgba(180, 180, 180, 0.5)";
@@ -414,11 +414,11 @@ function renderUplift(eqFlash) {
   var pad = (yMax - yMin) * 0.1;
   yMin -= pad; yMax += pad;
 
-  var t = makePlotTransform(cw, ch, 0, X_END, yMin, yMax);
+  var t = makePlotTransform(cw, ch, 0, 100, yMin, yMax);
   ctxUplift.clearRect(0, 0, cw, ch);
 
   var yTicks = getNiceTicks(yMin, yMax, 4);
-  drawAxes(ctxUplift, t, "Distance from MFT (km)", "Uplift (mm/yr)", [0, 50, 100, 150, 200], yTicks);
+  drawAxes(ctxUplift, t, "Distance from MFT (km)", "Uplift (mm/yr)", [0, 20, 40, 60, 80, 100], yTicks);
 
   // Zero line
   ctxUplift.strokeStyle = "#ccc";
@@ -426,7 +426,7 @@ function renderUplift(eqFlash) {
   ctxUplift.setLineDash([4, 4]);
   ctxUplift.beginPath();
   ctxUplift.moveTo(t.toCanvasX(0), t.toCanvasY(0));
-  ctxUplift.lineTo(t.toCanvasX(X_END), t.toCanvasY(0));
+  ctxUplift.lineTo(t.toCanvasX(100), t.toCanvasY(0));
   ctxUplift.stroke();
   ctxUplift.setLineDash([]);
 
@@ -461,8 +461,8 @@ function renderUplift(eqFlash) {
   }
   ctxUplift.stroke();
 
-  // Legend
-  var lx = PAD.left + 10, ly = PAD.top + 12;
+  // Legend (bottom-right, outside data region)
+  var lx = cw - PAD.right - 190, ly = ch - PAD.bottom + 28;
   ctxUplift.font = "11px sans-serif";
   ctxUplift.textAlign = "left";
   ctxUplift.textBaseline = "middle";
