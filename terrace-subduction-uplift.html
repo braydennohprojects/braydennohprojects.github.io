@@ -54,6 +54,10 @@ This simulator models terrace formation from subduction zone earthquake cycles. 
     <input id="sl-n" type="range" min="0.5" max="2" step="0.1" value="1.0">
     <span id="val-n">1.0</span>
 
+    <label for="sl-h">h (Hack's exp)</label>
+    <input id="sl-h" type="range" min="1.0" max="2.0" step="0.1" value="1.0">
+    <span id="val-h">1.0</span>
+
     <label for="sl-speed">Sim speed</label>
     <input id="sl-speed" type="range" min="1" max="200" step="1" value="100">
     <span id="val-speed">100x</span>
@@ -89,10 +93,12 @@ var xGrid = new Float64Array(NX);
 var DA = new Float64Array(NX);
 var currentFaultCut = 140;
 
-for (var i = 0; i < NX; i++) {
-  xGrid[i] = i * DX;
-  DA[i] = Math.max(X_END - xGrid[i], 1e-12);
+for (var i = 0; i < NX; i++) xGrid[i] = i * DX;
+
+function recomputeDA(h) {
+  for (var i = 0; i < NX; i++) DA[i] = Math.pow(Math.max(X_END - xGrid[i], 1e-12), h);
 }
+recomputeDA(1.0);
 
 function loadProfile(depth) {
   var prof = PROFILES[depth];
@@ -146,6 +152,8 @@ var slM = document.getElementById("sl-m");
 var valM = document.getElementById("val-m");
 var slN = document.getElementById("sl-n");
 var valN = document.getElementById("val-n");
+var slH = document.getElementById("sl-h");
+var valH = document.getElementById("val-h");
 var slSpeed = document.getElementById("sl-speed");
 var valSpeed = document.getElementById("val-speed");
 var infoTime = document.getElementById("info-time");
@@ -369,6 +377,7 @@ slLocked.addEventListener("input",function(){var d=parseInt(slLocked.value);valL
 slK.addEventListener("input",function(){var K=Math.pow(10,parseFloat(slK.value));valK.textContent=K>=0.01?K.toFixed(2):K>=0.001?K.toFixed(3):K.toExponential(1);});
 slM.addEventListener("input",function(){valM.textContent=parseFloat(slM.value).toFixed(1);});
 slN.addEventListener("input",function(){valN.textContent=parseFloat(slN.value).toFixed(1);});
+slH.addEventListener("input",function(){var h=parseFloat(slH.value);valH.textContent=h.toFixed(1);recomputeDA(h);});
 slSpeed.addEventListener("input",function(){valSpeed.textContent=slSpeed.value+"x";STEPS_PER_FRAME=parseInt(slSpeed.value);});
 
 renderTopo(topoZ,rawZ); renderUplift(false); renderFault(false); updateInfo();
