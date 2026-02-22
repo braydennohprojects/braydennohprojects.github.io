@@ -85,7 +85,7 @@ var NX = 2001;
 var X_END = 200.0;
 var DX = X_END / (NX - 1);
 var DT = 1;
-var STEPS_PER_FRAME = 100;  // base rate at 1x
+var STEPS_PER_FRAME = 20;  // base rate at 1x
 
 var upliftRed = new Float64Array(NX);
 var upliftBlue = new Float64Array(NX);
@@ -176,6 +176,8 @@ function fillDepressions(z) {
   }
 }
 
+var _tvdZn = new Float64Array(NX), _tvdR = new Float64Array(NX), _tvdPhi = new Float64Array(NX);
+
 function tvdStep(z, dx, dtM, Ke, m, n, DA, cfl) {
     var nx = z.length;
     var a = new Float64Array(nx);
@@ -188,10 +190,11 @@ function tvdStep(z, dx, dtM, Ke, m, n, DA, cfl) {
     }
     var am = 0;
     for (var i = 0; i < nx; i++) if (a[i] > am) am = a[i];
+    if (am > 1e6) am = 1e6;
     var ds = dtM;
     if (am > 0) { var da = cfl*dx/am; if (da < ds) ds = da; }
-    var ns = Math.ceil(dtM/ds); if (ns > 500) ns = 500; ds = dtM/ns;
-    var zn = new Float64Array(nx), r = new Float64Array(nx), phi = new Float64Array(nx);
+    var ns = Math.ceil(dtM/ds); if (ns > 50) ns = 50; ds = dtM/ns;
+    var zn = _tvdZn, r = _tvdR, phi = _tvdPhi;
     for (var st = 0; st < ns; st++) {
         for (var i = 0; i < nx; i++) {
             var dl = (i<nx-1)?(z[i+1]-z[i]):0, du = (i>0)?(z[i]-z[i-1]):0;
@@ -207,8 +210,10 @@ function tvdStep(z, dx, dtM, Ke, m, n, DA, cfl) {
             zn[i] = zi-(ds/dx)*(Fr-Fl);
         }
         zn[0]=0; zn[nx-1]=zn[nx-2];
-        for (var i = 0; i < nx; i++) z[i] = Math.max(0, zn[i]);
+        for (var i = 0; i < nx; i++) z[i] = (zn[i] > 0) ? zn[i] : 0;
     }
+    // NaN guard
+    for (var i = 0; i < nx; i++) if (z[i] !== z[i]) z[i] = 0;
     return z;
 }
 
@@ -382,7 +387,7 @@ slK.addEventListener("input",function(){var K=Math.pow(10,parseFloat(slK.value))
 slM.addEventListener("input",function(){valM.textContent=parseFloat(slM.value).toFixed(1);});
 slN.addEventListener("input",function(){valN.textContent=parseFloat(slN.value).toFixed(1);});
 slH.addEventListener("input",function(){var h=parseFloat(slH.value);valH.textContent=h.toFixed(1);recomputeDA(h);});
-slSpeed.addEventListener("input",function(){var v=parseInt(slSpeed.value),mult=Math.pow(10,v/10);STEPS_PER_FRAME=Math.max(1,Math.round(100*mult));valSpeed.textContent=mult>=1?mult.toFixed(1)+"x":mult.toFixed(2)+"x";});
+slSpeed.addEventListener("input",function(){var v=parseInt(slSpeed.value),mult=Math.pow(10,v/10);STEPS_PER_FRAME=Math.max(1,Math.round(20*mult));valSpeed.textContent=mult>=1?mult.toFixed(1)+"x":mult.toFixed(2)+"x";});
 
 renderTopo(topoZ,rawZ); renderUplift(false); renderFault(false); updateInfo();
 })();
