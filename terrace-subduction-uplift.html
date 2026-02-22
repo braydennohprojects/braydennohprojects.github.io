@@ -85,7 +85,7 @@ var NX = 2001;
 var X_END = 200.0;
 var DX = X_END / (NX - 1);
 var DT = 1;
-var STEPS_PER_FRAME = 20;  // base rate at 1x
+var STEPS_PER_FRAME = 2;  // base rate at 1x
 
 var upliftRed = new Float64Array(NX);
 var upliftBlue = new Float64Array(NX);
@@ -387,7 +387,7 @@ slK.addEventListener("input",function(){var K=Math.pow(10,parseFloat(slK.value))
 slM.addEventListener("input",function(){valM.textContent=parseFloat(slM.value).toFixed(1);});
 slN.addEventListener("input",function(){valN.textContent=parseFloat(slN.value).toFixed(1);});
 slH.addEventListener("input",function(){var h=parseFloat(slH.value);valH.textContent=h.toFixed(1);recomputeDA(h);});
-slSpeed.addEventListener("input",function(){var v=parseInt(slSpeed.value),mult=Math.pow(10,v/10);STEPS_PER_FRAME=Math.max(1,Math.round(20*mult));valSpeed.textContent=mult>=1?mult.toFixed(1)+"x":mult.toFixed(2)+"x";});
+slSpeed.addEventListener("input",function(){var v=parseInt(slSpeed.value),mult=Math.pow(10,v/10);STEPS_PER_FRAME=Math.max(1,Math.round(2*mult));valSpeed.textContent=mult>=1?mult.toFixed(1)+"x":mult.toFixed(2)+"x";});
 
 renderTopo(topoZ,rawZ); renderUplift(false); renderFault(false); updateInfo();
 })();
