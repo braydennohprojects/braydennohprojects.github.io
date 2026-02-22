@@ -61,12 +61,12 @@ where \(\mathcal{D}(\mathbf{x},t) = \min_{\mathbf{y}:\,R(\mathbf{y},t)=1} \|\mat
     <span id="val-wdist">1.0</span>
 
     <label for="sl-wcoh">\(w_c\)</label>
-    <input id="sl-wcoh" type="range" min="0" max="10.0" step="0.1" value="2.0">
-    <span id="val-wcoh">2.0</span>
+    <input id="sl-wcoh" type="range" min="0" max="10.0" step="0.1" value="1.0">
+    <span id="val-wcoh">1.0</span>
 
     <label for="sl-friction">\(\mu\)</label>
-    <input id="sl-friction" type="range" min="1" max="50" step="0.5" value="5">
-    <span id="val-friction">5</span>
+    <input id="sl-friction" type="range" min="0.5" max="50" step="0.5" value="1">
+    <span id="val-friction">1</span>
 
     <label for="sl-pop">Population</label>
     <input id="sl-pop" type="range" min="100" max="10000" step="100" value="1000">
@@ -89,7 +89,7 @@ where \(\mathcal{D}(\mathbf{x},t) = \min_{\mathbf{y}:\,R(\mathbf{y},t)=1} \|\mat
 "use strict";
 
 // ── Grid constants ──
-const CELL_SIZE = 50;
+const CELL_SIZE = 10;
 const XMIN = 1000, XMAX = 9000;
 const YMIN = -2000, YMAX = 2000;
 const COLS = Math.round((XMAX - XMIN) / CELL_SIZE);
@@ -278,7 +278,8 @@ function caStep(baseU, wCoh, friction, crawlSpeed) {
 }
 
 function countClusters() {
-  const visited = new Uint8Array(N);
+  visitedBuf.fill(0);
+  const visited = visitedBuf;
   let count = 0; const queue = [];
   for (let i = 0; i < N; i++) {
     if (!village[i] || visited[i]) continue;
@@ -323,7 +324,8 @@ function initVillage() {
     if (best.idx >= 0) { village[best.idx] = 1; const r = (best.idx / COLS) | 0, c = best.idx % COLS; updateNeighbors(r, c, 1); }
   }
   for (let b = 0; b < 150; b++) caStep(baseU, wCoh, friction, 10);
-  prevVillage = new Uint8Array(village);
+  if (!prevVillage || prevVillage.length !== N) prevVillage = new Uint8Array(N);
+  prevVillage.set(village);
   render(); updateInfo();
 }
 
@@ -331,6 +333,8 @@ function initVillage() {
 // 6. Canvas Renderer
 // ══════════════════════════════════════════
 const imgData = ctx.createImageData(COLS, ROWS);
+const flippedData = ctx.createImageData(COLS, ROWS);
+const visitedBuf = new Uint8Array(N);  // reuse for countClusters
 
 function render() {
   const pixels = imgData.data;
@@ -343,12 +347,12 @@ function render() {
     else if (nowR)                   { pixels[off]=0;   pixels[off+1]=0;   pixels[off+2]=255; pixels[off+3]=255; }
     else                             { pixels[off]=0;   pixels[off+1]=0;   pixels[off+2]=0;   pixels[off+3]=255; }
   }
-  const flipped = ctx.createImageData(COLS, ROWS); const fp = flipped.data;
+  const fp = flippedData.data;
   for (let r = 0; r < ROWS; r++) {
     const srcOff = r * COLS * 4, dstOff = (ROWS - 1 - r) * COLS * 4;
     for (let c = 0; c < COLS * 4; c++) fp[dstOff + c] = pixels[srcOff + c];
   }
-  ctx.putImageData(flipped, 0, 0);
+  ctx.putImageData(flippedData, 0, 0);
 }
 
 const infoStable = document.getElementById("info-stable");
@@ -379,7 +383,7 @@ function step() {
   if (currentStep >= riverTimesteps.length - 1) { pause(); return; }
   currentStep++;
   const wDist = getParam("wdist"), wCoh = getParam("wcoh"), friction = getParam("friction"), crawlSpeed = getParam("crawl");
-  prevVillage = new Uint8Array(village);
+  prevVillage.set(village);
   river = rasterizeChannel(riverTimesteps[currentStep]);
   dist = distanceTransform(river);
   const baseU = computeBaseU(dist, river, wDist);
