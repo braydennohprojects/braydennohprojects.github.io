@@ -35,16 +35,16 @@ This simulator models terrace formation from subduction zone earthquake cycles. 
 
   <div style="display:grid; grid-template-columns:auto 1fr auto; gap:4px 10px; align-items:center; max-width:460px;">
     <label for="sl-interval">EQ cycle</label>
-    <input id="sl-interval" type="range" min="0" max="1010" step="10" value="100">
-    <span id="val-interval">100 yr</span>
+    <input id="sl-interval" type="range" min="0" max="1010" step="10" value="20">
+    <span id="val-interval">20 yr</span>
 
     <label for="sl-locked">Locking depth</label>
-    <input id="sl-locked" type="range" min="5" max="30" step="5" value="20">
-    <span id="val-locked">20 km</span>
+    <input id="sl-locked" type="range" min="5" max="30" step="5" value="5">
+    <span id="val-locked">5 km</span>
 
     <label for="sl-K">K (erosivity)</label>
-    <input id="sl-K" type="range" min="-4" max="0" step="0.1" value="-2">
-    <span id="val-K">0.01</span>
+    <input id="sl-K" type="range" min="-4" max="0" step="0.1" value="0">
+    <span id="val-K">1.00</span>
 
     <label for="sl-m">m (area exp)</label>
     <input id="sl-m" type="range" min="0" max="1" step="0.1" value="0">
@@ -55,12 +55,12 @@ This simulator models terrace formation from subduction zone earthquake cycles. 
     <span id="val-n">1.0</span>
 
     <label for="sl-h">h (Hack's exp)</label>
-    <input id="sl-h" type="range" min="1.0" max="2.0" step="0.1" value="1.0">
-    <span id="val-h">1.0</span>
+    <input id="sl-h" type="range" min="1.0" max="2.0" step="0.1" value="1.5">
+    <span id="val-h">1.5</span>
 
     <label for="sl-speed">Sim speed</label>
-    <input id="sl-speed" type="range" min="1" max="200" step="1" value="100">
-    <span id="val-speed">100x</span>
+    <input id="sl-speed" type="range" min="-10" max="10" step="1" value="0">
+    <span id="val-speed">1x</span>
   </div>
 </div>
 
@@ -85,20 +85,20 @@ var NX = 2001;
 var X_END = 200.0;
 var DX = X_END / (NX - 1);
 var DT = 1;
-var STEPS_PER_FRAME = 100;
+var STEPS_PER_FRAME = 100;  // base rate at 1x
 
 var upliftRed = new Float64Array(NX);
 var upliftBlue = new Float64Array(NX);
 var xGrid = new Float64Array(NX);
 var DA = new Float64Array(NX);
-var currentFaultCut = 140;
+var currentFaultCut = 70;
 
 for (var i = 0; i < NX; i++) xGrid[i] = i * DX;
 
 function recomputeDA(h) {
   for (var i = 0; i < NX; i++) DA[i] = Math.pow(Math.max(X_END - xGrid[i], 1e-12), h);
 }
-recomputeDA(1.0);
+recomputeDA(1.5);
 
 function loadProfile(depth) {
   var prof = PROFILES[depth];
@@ -109,7 +109,7 @@ function loadProfile(depth) {
   }
   currentFaultCut = prof.fc;
 }
-loadProfile(20);
+loadProfile(5);
 
 /* ================================================================
    Section 1: Canvas setup — responsive width
@@ -382,7 +382,7 @@ slK.addEventListener("input",function(){var K=Math.pow(10,parseFloat(slK.value))
 slM.addEventListener("input",function(){valM.textContent=parseFloat(slM.value).toFixed(1);});
 slN.addEventListener("input",function(){valN.textContent=parseFloat(slN.value).toFixed(1);});
 slH.addEventListener("input",function(){var h=parseFloat(slH.value);valH.textContent=h.toFixed(1);recomputeDA(h);});
-slSpeed.addEventListener("input",function(){valSpeed.textContent=slSpeed.value+"x";STEPS_PER_FRAME=parseInt(slSpeed.value);});
+slSpeed.addEventListener("input",function(){var v=parseInt(slSpeed.value),mult=Math.pow(10,v/10);STEPS_PER_FRAME=Math.max(1,Math.round(100*mult));valSpeed.textContent=mult>=1?mult.toFixed(1)+"x":mult.toFixed(2)+"x";});
 
 renderTopo(topoZ,rawZ); renderUplift(false); renderFault(false); updateInfo();
 })();
