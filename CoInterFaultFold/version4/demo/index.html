@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interseismic Velocity Explorer</title>
+<script>MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]}};</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Georgia,serif;font-size:15px;color:#222;background:#fff;line-height:1.55}
+nav{font-family:sans-serif;font-size:13px;padding:8px 24px;border-bottom:1px solid #ddd;color:#888}
+nav a{color:#555;text-decoration:none}
+nav a:hover{color:#000}
+.columns{display:flex;max-width:1400px;margin:0 auto;padding:24px;gap:32px}
+.sidebar{width:280px;flex-shrink:0}
+.sidebar h1{font-size:20px;margin-bottom:12px;line-height:1.3}
+.sidebar p{margin-bottom:10px;font-size:14px;color:#444}
+.sidebar .eq{background:#f8f8f8;border:1px solid #eee;border-radius:4px;padding:8px 10px;margin:10px 0;font-size:13px}
+.sidebar hr{border:none;border-top:1px solid #ddd;margin:16px 0}
+.main{flex:1;min-width:0}
+canvas{display:block;margin:0 auto;background:#fff}
+#legend{display:flex;gap:18px;justify-content:center;margin:8px 0 12px;font-size:12px;font-family:sans-serif;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:5px}
+.legend-swatch{width:24px;height:3px;border-radius:1px}
+.slider-grid{display:grid;grid-template-columns:auto 1fr auto;gap:5px 12px;align-items:center;font-family:sans-serif;font-size:13px;max-width:580px;margin:0 auto}
+.slider-grid label{text-align:right;color:#555}
+.slider-grid input[type=range]{width:100%}
+.slider-grid .val{font-family:monospace;font-size:13px;min-width:60px}
+#info{text-align:center;font-family:monospace;font-size:12px;color:#666;margin:6px 0}
+.gap{height:6px}
+</style>
+</head>
+<body>
+<nav><a href="#">ElasticStructural</a> / Interseismic Explorer</nav>
+<div class="columns">
+<div class="sidebar">
+<h1>Interseismic Velocity Explorer</h1>
+<p>Interactive decomposition of the interseismic vertical velocity field for the NE Japan (Tohoku) subduction zone geometry.</p>
+<hr>
+<p>The absolute interseismic velocity is:</p>
+<div class="eq">\[v_{\text{inter}}^{\,\text{abs}} = (1-\alpha)\,w(z)\,v_{\text{struct}} - v_{\text{co}}\]</div>
+<p>where \(\alpha\) partitions the vertical budget between hanging-wall uplift and footwall subsidence, controlled by slab buoyancy.</p>
+<hr>
+<p>\(v_{\text{struct}}(x) = \sin\theta(\xi^*(x))\) is the Suppe kinematic velocity mapped through the axial surface projection.</p>
+<hr>
+<p>\(w(z)\) is the transmission coefficient, representing the transition from rigid Suppe kinematics (valid in brittle crust) to distributed ductile flow (no discrete uplift). Tapers via arctan at the onset depth.</p>
+<hr>
+<p>\(v_{\text{co}}\) is the elastic back-slip from the locked zone, computed via edge dislocation Green's functions (Savage 1983).</p>
+<hr>
+<p><b>Fault:</b> \(z = -(0.12\,x + 0.0007\,x^2)\) km<br>
+<b>Dip:</b> 6.8&deg; to 34.6&deg; over 300 km<br>
+<b>\(V_p\):</b> 83 mm/yr (Pacific Plate)</p>
+<hr>
+<p style="font-size:12px;color:#999">\(\alpha=1\): Savage BSM (zero baseline).<br>
+\(\alpha=0\): Himalayan limit (full structural uplift).<br>
+\(w=1\): Suppe fully valid.<br>
+\(w\to 0\): deep/hot, no discrete uplift.</p>
+</div>
+
+<div class="main">
+<canvas id="vel-canvas"></canvas>
+<div class="gap"></div>
+<canvas id="geo-canvas"></canvas>
+<div id="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:#222"></div>Steady-state: (1-&alpha;)&middot;w&middot;v<sub>struct</sub></div>
+  <div class="legend-item"><div class="legend-swatch" style="background:steelblue"></div>Locked zone: v<sub>co</sub></div>
+  <div class="legend-item"><div class="legend-swatch" style="background:firebrick"></div>Interseismic</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#bbb"></div>v<sub>struct</sub> (raw Suppe)</div>
+</div>
+<div id="info"></div>
+<div class="slider-grid">
+  <label>Locking depth</label>
+  <input type="range" id="sl-lock" min="5" max="80" step="1" value="50">
+  <span class="val" id="v-lock">50 km</span>
+
+  <label>\(\alpha\)</label>
+  <input type="range" id="sl-alpha" min="0" max="1" step="0.01" value="1">
+  <span class="val" id="v-alpha">1.00</span>
+
+  <label>\(w(z)\) onset</label>
+  <input type="range" id="sl-wt" min="10" max="100" step="1" value="100">
+  <span class="val" id="v-wt">100 km</span>
+
+  <label>Geometry</label>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span id="geo-label-curved" style="font-weight:bold;color:#222">Curved</span>
+    <label style="position:relative;display:inline-block;width:40px;height:20px;margin:0">
+      <input type="checkbox" id="cb-linear" style="opacity:0;width:0;height:0">
+      <span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#bbb;border-radius:10px;transition:.2s"></span>
+      <span id="toggle-knob" style="position:absolute;content:'';height:16px;width:16px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s"></span>
+    </label>
+    <span id="geo-label-linear" style="color:#999">Linear</span>
+  </div>
+  <span class="val" id="v-geo">Curved</span>
+</div>
+</div>
+</div>
+
+<script>
+// ===================================================================
+// HiDPI canvas setup
+// ===================================================================
+var DPR = window.devicePixelRatio || 1;
+var VEL_W = 860, VEL_H = 400;
+var GEO_W = 860, GEO_H = 240;
+
+function setupHiDPI(canvas, w, h) {
+    canvas.width = w * DPR;
+    canvas.height = h * DPR;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(DPR, DPR);
+    return ctx;
+}
+
+// ===================================================================
+// Edge dislocation kernels for v_co (Savage 1983 / Segall Ch.3)
+// ===================================================================
+function u2Edge(xObs, slip, delta, d, xRef, orient) {
+    if (d <= 1e-6)
+        return -(slip / Math.PI) * Math.sin(delta) * Math.atan2(orient * (xObs - xRef), 1e-12);
+    var zeta = orient * (xObs - xRef) / d;
+    var sd = Math.sin(delta), cd = Math.cos(delta);
+    return -(slip / Math.PI) * (sd * Math.atan(zeta) + (cd + zeta * sd) / (1.0 + zeta * zeta));
+}
+
+function u2Seg(xObs, x1, z1, x2, z2, slip) {
+    var d1 = -z1, d2 = -z2;
+    var dx = x2 - x1, dd = d2 - d1;
+    var delta = Math.atan2(Math.abs(dd), Math.max(Math.abs(dx), 1e-12));
+    var orient = Math.abs(dx) > 1e-12 ? Math.sign(dx) : 1.0;
+    var xt, dt, xb, db;
+    if (d1 <= d2) { xt = x1; dt = d1; xb = x2; db = d2; }
+    else           { xt = x2; dt = d2; xb = x1; db = d1; }
+    return u2Edge(xObs, slip, delta, dt, xt, orient) + u2Edge(xObs, -slip, delta, db, xb, orient);
+}
+
+// ===================================================================
+// Fault geometry
+// ===================================================================
+var N_FAULT = 3000, N_SEG = 400, N_OBS = 400;
+var xFd = new Float64Array(N_FAULT), zFd = new Float64Array(N_FAULT);
+var thFd = new Float64Array(N_FAULT), xAxFd = new Float64Array(N_FAULT), depFd = new Float64Array(N_FAULT);
+var xF = new Float64Array(N_SEG + 1), zF = new Float64Array(N_SEG + 1), depthMid = new Float64Array(N_SEG);
+var xObs = new Float64Array(N_OBS);
+var vStructSuppe = new Float64Array(N_OBS), depthAtObs = new Float64Array(N_OBS);
+var contrib = [];
+var vCo = new Float64Array(N_OBS), vSteady = new Float64Array(N_OBS), vInter = new Float64Array(N_OBS);
+
+var isLinear = false;
+var LINEAR_DIP_RAD = 20.0 * Math.PI / 180.0;
+
+function faultZ(x) { return isLinear ? -x * Math.tan(LINEAR_DIP_RAD) : -(0.12 * x + 0.0007 * x * x); }
+function faultSlope(x) { return isLinear ? -Math.tan(LINEAR_DIP_RAD) : -(0.12 + 0.0014 * x); }
+
+function buildFault() {
+    for (var i = 0; i < N_FAULT; i++) {
+        var x = (i / (N_FAULT - 1)) * 300.0;
+        xFd[i] = x; zFd[i] = faultZ(x); depFd[i] = -zFd[i];
+        thFd[i] = Math.atan2(faultSlope(x), 1.0);
+    }
+    for (var i = 0; i < N_FAULT; i++) {
+        var ct = Math.cos(thFd[i]);
+        if (Math.abs(ct) > 1e-10) { var t = -zFd[i] / ct; xAxFd[i] = xFd[i] + t * (-Math.sin(thFd[i])); }
+        else xAxFd[i] = xFd[i];
+    }
+    for (var j = 0; j < N_OBS; j++) xObs[j] = 0.5 + (j / (N_OBS - 1)) * 299.0;
+    // Suppe kinematic: project each obs point through axial surface to fault, return sin(|theta|)
+    for (var j = 0; j < N_OBS; j++) {
+        var xo = xObs[j], found = false;
+        for (var i = 0; i < N_FAULT - 1; i++) {
+            if (xAxFd[i] <= xo && xAxFd[i + 1] >= xo) {
+                var frac = (xo - xAxFd[i]) / (xAxFd[i + 1] - xAxFd[i] + 1e-15);
+                vStructSuppe[j] = Math.abs(Math.sin(thFd[i] + frac * (thFd[i + 1] - thFd[i])));
+                depthAtObs[j] = depFd[i] + frac * (depFd[i + 1] - depFd[i]);
+                found = true; break;
+            }
+        }
+        if (!found) { vStructSuppe[j] = Math.abs(Math.sin(thFd[N_FAULT - 1])); depthAtObs[j] = depFd[N_FAULT - 1]; }
+    }
+    for (var i = 0; i <= N_SEG; i++) { var x = (i / N_SEG) * 300.0; xF[i] = x; zF[i] = faultZ(x); }
+    for (var i = 0; i < N_SEG; i++) depthMid[i] = -(zF[i] + zF[i + 1]) / 2.0;
+}
+
+function precomputeElastic() {
+    contrib = new Array(N_SEG);
+    for (var i = 0; i < N_SEG; i++) {
+        contrib[i] = new Float64Array(N_OBS);
+        for (var j = 0; j < N_OBS; j++) contrib[i][j] = u2Seg(xObs[j], xF[i], zF[i], xF[i + 1], zF[i + 1], -1.0);
+    }
+}
+
+// ===================================================================
+// w(z) transmission coefficient
+// ===================================================================
+var W_SCALE = 5.0;
+function wFunc(depth, onset) {
+    if (onset >= 100) return 1.0;
+    return 0.5 - (1.0 / Math.PI) * Math.atan((depth - onset) / W_SCALE);
+}
+
+// ===================================================================
+// Update
+// ===================================================================
+function update() {
+    var lockDepth = parseFloat(document.getElementById('sl-lock').value);
+    var alpha = parseFloat(document.getElementById('sl-alpha').value);
+    var wOnset = parseFloat(document.getElementById('sl-wt').value);
+    document.getElementById('v-lock').textContent = lockDepth + ' km';
+    document.getElementById('v-alpha').textContent = alpha.toFixed(2);
+    document.getElementById('v-wt').textContent = wOnset + ' km';
+
+    for (var j = 0; j < N_OBS; j++) {
+        var sCo = 0;
+        for (var i = 0; i < N_SEG; i++) { if (depthMid[i] < lockDepth) sCo += contrib[i][j]; }
+        vCo[j] = sCo;
+        vSteady[j] = (1.0 - alpha) * wFunc(depthAtObs[j], wOnset) * vStructSuppe[j];
+        vInter[j] = vSteady[j] - sCo;
+    }
+    var maxI = -1e9, minI = 1e9;
+    for (var j = 0; j < N_OBS; j++) { if (vInter[j] > maxI) maxI = vInter[j]; if (vInter[j] < minI) minI = vInter[j]; }
+    document.getElementById('info').textContent =
+        'Interseismic: ' + (minI * 83).toFixed(1) + ' to ' + (maxI * 83).toFixed(1) +
+        ' mm/yr  |  Far-field baseline: ' + (vSteady[N_OBS - 1] * 83).toFixed(1) + ' mm/yr';
+    draw();
+}
+
+// ===================================================================
+// Drawing
+// ===================================================================
+var velCtx, geoCtx;
+var VP = {l: 62, r: 20, t: 30, b: 42};
+var GP = {l: 62, r: 20, t: 16, b: 38};
+
+function vX(x) { return VP.l + (x / 300) * (VEL_W - VP.l - VP.r); }
+function vY(v) { return VP.t + ((1.0 - v) / 1.5) * (VEL_H - VP.t - VP.b); }
+function gX(x) { return GP.l + (x / 300) * (GEO_W - GP.l - GP.r); }
+function gY(z) { return GP.t + ((-z) / 110) * (GEO_H - GP.t - GP.b); }
+
+function drawCurve(ctx, xs, ys, color, width, dash) {
+    ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = width || 2;
+    if (dash) ctx.setLineDash(dash); else ctx.setLineDash([]);
+    for (var j = 0; j < xs.length; j++) { if (j === 0) ctx.moveTo(xs[j], ys[j]); else ctx.lineTo(xs[j], ys[j]); }
+    ctx.stroke(); ctx.setLineDash([]);
+}
+
+function drawAxes(ctx, xMap, yMap, xTicks, yTicks, w, h, pad, xLabel, yLabel) {
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    // grid
+    ctx.strokeStyle = '#f0f0f0'; ctx.lineWidth = 0.7;
+    for (var i = 0; i < xTicks.length; i++) { var px = xMap(xTicks[i]); ctx.beginPath(); ctx.moveTo(px, pad.t); ctx.lineTo(px, h - pad.b); ctx.stroke(); }
+    for (var i = 0; i < yTicks.length; i++) { var py = yMap(yTicks[i]); ctx.beginPath(); ctx.moveTo(pad.l, py); ctx.lineTo(w - pad.r, py); ctx.stroke(); }
+    // tick marks only (no box)
+    ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1;
+    for (var i = 0; i < xTicks.length; i++) { var px = xMap(xTicks[i]); ctx.beginPath(); ctx.moveTo(px, h - pad.b); ctx.lineTo(px, h - pad.b + 4); ctx.stroke(); }
+    for (var i = 0; i < yTicks.length; i++) { var py = yMap(yTicks[i]); ctx.beginPath(); ctx.moveTo(pad.l - 4, py); ctx.lineTo(pad.l, py); ctx.stroke(); }
+    // tick labels
+    ctx.fillStyle = '#666'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    for (var i = 0; i < xTicks.length; i++) ctx.fillText(xTicks[i], xMap(xTicks[i]), h - pad.b + 16);
+    ctx.textAlign = 'right';
+    for (var i = 0; i < yTicks.length; i++) ctx.fillText(yTicks[i], pad.l - 7, yMap(yTicks[i]) + 4);
+    // axis labels
+    ctx.fillStyle = '#444'; ctx.font = '13px Georgia, serif'; ctx.textAlign = 'center';
+    ctx.fillText(xLabel, pad.l + (w - pad.l - pad.r) / 2, h - 4);
+    ctx.save(); ctx.translate(15, pad.t + (h - pad.t - pad.b) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText(yLabel, 0, 0); ctx.restore();
+}
+
+function draw() {
+    var lockDepth = parseFloat(document.getElementById('sl-lock').value);
+    var wOnset = parseFloat(document.getElementById('sl-wt').value);
+
+    // --- Velocity ---
+    drawAxes(velCtx, vX, vY, [0, 50, 100, 150, 200, 250, 300],
+             [-0.4, -0.2, 0, 0.2, 0.4, 0.6, 0.8, 1.0],
+             VEL_W, VEL_H, VP, 'Distance from trench (km)', 'vz / s');
+    // zero line
+    velCtx.strokeStyle = '#ddd'; velCtx.lineWidth = 0.8;
+    velCtx.beginPath(); velCtx.moveTo(vX(0), vY(0)); velCtx.lineTo(vX(300), vY(0)); velCtx.stroke();
+
+    var px = new Float64Array(N_OBS), pyR = new Float64Array(N_OBS);
+    var pyS = new Float64Array(N_OBS), pyC = new Float64Array(N_OBS), pyI = new Float64Array(N_OBS);
+    for (var j = 0; j < N_OBS; j++) {
+        px[j] = vX(xObs[j]); pyR[j] = vY(vStructSuppe[j]);
+        pyS[j] = vY(vSteady[j]); pyC[j] = vY(vCo[j]); pyI[j] = vY(vInter[j]);
+    }
+    velCtx.save(); velCtx.beginPath();
+    velCtx.rect(VP.l, VP.t, VEL_W - VP.l - VP.r, VEL_H - VP.t - VP.b); velCtx.clip();
+    drawCurve(velCtx, px, pyR, '#ccc', 1.3, [4, 4]);
+    drawCurve(velCtx, px, pyC, 'steelblue', 2.2);
+    drawCurve(velCtx, px, pyS, '#222', 2.2, [7, 4]);
+    drawCurve(velCtx, px, pyI, 'firebrick', 2.5);
+    velCtx.restore();
+
+    // --- Geometry ---
+    drawAxes(geoCtx, gX, gY, [0, 50, 100, 150, 200, 250, 300],
+             [0, -20, -40, -60, -80, -100],
+             GEO_W, GEO_H, GP, 'Distance from trench (km)', 'Depth (km)');
+    // surface
+    geoCtx.strokeStyle = '#333'; geoCtx.lineWidth = 1;
+    geoCtx.beginPath(); geoCtx.moveTo(gX(0), gY(0)); geoCtx.lineTo(gX(300), gY(0)); geoCtx.stroke();
+
+    geoCtx.save(); geoCtx.beginPath();
+    geoCtx.rect(GP.l, GP.t, GEO_W - GP.l - GP.r, GEO_H - GP.t - GP.b); geoCtx.clip();
+
+    // w(z) shading
+    if (wOnset < 95) {
+        geoCtx.fillStyle = 'rgba(255,180,80,0.10)';
+        geoCtx.fillRect(GP.l, gY(-wOnset), GEO_W - GP.l - GP.r, gY(-110) - gY(-wOnset));
+        geoCtx.fillStyle = 'rgba(180,120,0,0.5)'; geoCtx.font = '10px sans-serif'; geoCtx.textAlign = 'right';
+        geoCtx.fillText('w(z) onset', GEO_W - GP.r - 4, gY(-wOnset) - 3);
+        geoCtx.strokeStyle = 'rgba(200,140,40,0.6)'; geoCtx.lineWidth = 1.2; geoCtx.beginPath();
+        for (var d = 0; d <= 110; d += 0.5) {
+            var wV = wFunc(d, wOnset), px2 = GEO_W - GP.r - 2 - wV * 35, py2 = gY(-d);
+            if (d === 0) geoCtx.moveTo(px2, py2); else geoCtx.lineTo(px2, py2);
+        }
+        geoCtx.stroke();
+    }
+    // locking depth
+    geoCtx.strokeStyle = 'rgba(100,100,100,0.4)'; geoCtx.lineWidth = 1; geoCtx.setLineDash([5, 3]);
+    geoCtx.beginPath(); geoCtx.moveTo(GP.l, gY(-lockDepth)); geoCtx.lineTo(GEO_W - GP.r, gY(-lockDepth)); geoCtx.stroke();
+    geoCtx.setLineDash([]); geoCtx.fillStyle = '#888'; geoCtx.font = '10px sans-serif'; geoCtx.textAlign = 'left';
+    geoCtx.fillText('Lock ' + lockDepth + ' km', GP.l + 4, gY(-lockDepth) - 3);
+
+    // fault trace
+    var lockIdx = N_SEG;
+    for (var i = 0; i < N_SEG; i++) { if (depthMid[i] >= lockDepth) { lockIdx = i; break; } }
+    geoCtx.beginPath(); geoCtx.strokeStyle = 'steelblue'; geoCtx.lineWidth = 2.8;
+    geoCtx.moveTo(gX(xF[0]), gY(zF[0]));
+    for (var i = 1; i <= Math.min(lockIdx + 1, N_SEG); i++) geoCtx.lineTo(gX(xF[i]), gY(zF[i]));
+    geoCtx.stroke();
+    if (lockIdx < N_SEG) {
+        geoCtx.beginPath(); geoCtx.strokeStyle = 'firebrick'; geoCtx.lineWidth = 2.8;
+        geoCtx.moveTo(gX(xF[lockIdx + 1]), gY(zF[lockIdx + 1]));
+        for (var i = lockIdx + 2; i <= N_SEG; i++) geoCtx.lineTo(gX(xF[i]), gY(zF[i]));
+        geoCtx.stroke();
+    }
+    geoCtx.restore();
+}
+
+// ===================================================================
+// Events & Init
+// ===================================================================
+function rebuildAll() { buildFault(); precomputeElastic(); update(); }
+
+function onToggleGeometry() {
+    var cb = document.getElementById('cb-linear'); isLinear = cb.checked;
+    var knob = document.getElementById('toggle-knob');
+    var lC = document.getElementById('geo-label-curved'), lL = document.getElementById('geo-label-linear');
+    var vG = document.getElementById('v-geo');
+    if (isLinear) { knob.style.left='22px'; cb.parentElement.querySelector('span').style.background='#6a9'; lC.style.color='#999'; lC.style.fontWeight='normal'; lL.style.color='#222'; lL.style.fontWeight='bold'; vG.textContent='Linear 20\u00B0'; }
+    else { knob.style.left='2px'; cb.parentElement.querySelector('span').style.background='#bbb'; lC.style.color='#222'; lC.style.fontWeight='bold'; lL.style.color='#999'; lL.style.fontWeight='normal'; vG.textContent='Curved'; }
+    rebuildAll();
+}
+
+function init() {
+    velCtx = setupHiDPI(document.getElementById('vel-canvas'), VEL_W, VEL_H);
+    geoCtx = setupHiDPI(document.getElementById('geo-canvas'), GEO_W, GEO_H);
+    buildFault(); precomputeElastic();
+    ['sl-lock', 'sl-alpha', 'sl-wt'].forEach(function(id) { document.getElementById(id).addEventListener('input', update); });
+    document.getElementById('cb-linear').addEventListener('change', onToggleGeometry);
+    update();
+}
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
