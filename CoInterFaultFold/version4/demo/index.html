@@ -225,7 +225,7 @@ function update(){
 var vzCtx,vxCtx,geoCtx;
 var VP={l:62,r:20,t:26,b:38}, GP={l:62,r:20,t:14,b:36};
 
-function mapX(x,w){return VP.l+(x/200)*(w-VP.l-VP.r);}
+function mapX(x,w){return VP.l+((x+10)/210)*(w-VP.l-VP.r);}
 function mapVz(v){return VP.t+((1-v)/1.5)*(VZ_H-VP.t-VP.b);}
 function mapVx(v){return VP.t+((1-v)/2.0)*(VX_H-VP.t-VP.b);}
 function gMapX(x){return GP.l+((x+10)/210)*(PW-GP.l-GP.r);}
@@ -253,7 +253,7 @@ function axes(ctx,xM,yM,xT,yT,w,h,pad,xL,yL){
 function drawPanel(ctx,mapY,H,dataRaw,dataSS,dataCo,dataIn,xT,yT,yLabel){
     var xM=function(x){return mapX(x,PW);};
     axes(ctx,xM,mapY,xT,yT,PW,H,VP,'Distance from trench (km)',yLabel);
-    ctx.strokeStyle='#ddd';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(xM(0),mapY(0));ctx.lineTo(xM(200),mapY(0));ctx.stroke();
+    ctx.strokeStyle='#ddd';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(xM(-10),mapY(0));ctx.lineTo(xM(200),mapY(0));ctx.stroke();
     var px=new Float64Array(N_OBS),pR=new Float64Array(N_OBS),pS=new Float64Array(N_OBS),pC=new Float64Array(N_OBS),pI=new Float64Array(N_OBS);
     for(var j=0;j<N_OBS;j++){px[j]=xM(xObs[j]);pR[j]=mapY(dataRaw[j]);pS[j]=mapY(dataSS[j]);pC[j]=mapY(dataCo[j]);pI[j]=mapY(dataIn[j]);}
     ctx.save();ctx.beginPath();ctx.rect(VP.l,VP.t,PW-VP.l-VP.r,H-VP.t-VP.b);ctx.clip();
@@ -271,8 +271,8 @@ function draw(){
     // Horizontal
     drawPanel(vxCtx,mapVx,VX_H,vsX,ssX,coX,inX,[0,50,100,150,200],[-1,-0.5,0,0.5,1.0],'vx / s');
     // Geometry - dynamic depth range
-    geoDepthMax = (geoMode==='himalaya') ? 40 : 110;
-    var geoYticks = (geoMode==='himalaya') ? [0,-10,-20,-30,-40] : [0,-20,-40,-60,-80,-100];
+    geoDepthMax = (geoMode==='himalaya') ? 40 : 80;
+    var geoYticks = (geoMode==='himalaya') ? [0,-10,-20,-30,-40] : [0,-20,-40,-60,-80];
     axes(geoCtx,gMapX,gMapY,[0,50,100,150,200],geoYticks,PW,GEO_H,GP,'Distance from trench (km)','Depth (km)');
     // surface line
     geoCtx.strokeStyle='#333';geoCtx.lineWidth=1;
