@@ -279,36 +279,29 @@ function draw(){
     geoCtx.beginPath();geoCtx.moveTo(gMapX(-10),gMapY(0));geoCtx.lineTo(gMapX(200),gMapY(0));geoCtx.stroke();
     geoCtx.save();geoCtx.beginPath();geoCtx.rect(GP.l,GP.t,PW-GP.l-GP.r,GEO_H-GP.t-GP.b);geoCtx.clip();
 
-    // --- Footwall hash stripes below fault, fading at w(T) onset ---
-    // Build clipping path: fault trace on top, rectangle on bottom/sides
+    // --- Hanging wall: horizontal orange-white stripes between surface and fault ---
     geoCtx.save();
+    // Clip to hanging wall wedge: surface on top, fault on bottom
     geoCtx.beginPath();
-    geoCtx.moveTo(gMapX(xF[0]),gMapY(zF[0]));
-    for(var i=1;i<=N_SEG;i++) geoCtx.lineTo(gMapX(xF[i]),gMapY(zF[i]));
-    geoCtx.lineTo(gMapX(xF[N_SEG]),gMapY(-geoDepthMax));
-    geoCtx.lineTo(gMapX(xF[0]),gMapY(-geoDepthMax));
+    geoCtx.moveTo(gMapX(-10),gMapY(0));
+    geoCtx.lineTo(gMapX(xF[N_SEG]),gMapY(0));
+    // trace fault backwards (bottom boundary)
+    for(var i=N_SEG;i>=0;i--) geoCtx.lineTo(gMapX(xF[i]),gMapY(zF[i]));
     geoCtx.closePath();
     geoCtx.clip();
-    // Draw diagonal stripes
-    var stripeSpacing=8, stripeAngle=Math.PI/4;
-    var maxPx=PW-GP.r, minPx=GP.l;
-    var maxPy=gMapY(-geoDepthMax), minPy=gMapY(0);
-    var diagLen=Math.sqrt((maxPx-minPx)*(maxPx-minPx)+(maxPy-minPy)*(maxPy-minPy));
-    for(var s=-diagLen;s<diagLen*2;s+=stripeSpacing){
-        var sx=minPx+s, sy=minPy;
-        var ex=sx+diagLen*Math.cos(stripeAngle), ey=sy+diagLen*Math.sin(stripeAngle);
-        // Compute depth at midpoint of stripe for fading
-        var midPy=(sy+ey)/2;
-        // Map pixel y back to depth
-        var midDepth=((midPy-GP.t)/(gMapY(-geoDepthMax)-GP.t))*geoDepthMax;
-        var wVal = (wo>=100) ? 1.0 : wF(midDepth,wo);
-        var alpha=0.12*wVal+0.03*(1-wVal); // fade from 0.12 to 0.03
-        geoCtx.strokeStyle='rgba(210,140,50,'+alpha.toFixed(3)+')';
-        geoCtx.lineWidth=1;
-        geoCtx.beginPath();geoCtx.moveTo(sx,sy);geoCtx.lineTo(ex,ey);geoCtx.stroke();
+    // Horizontal stripes: alternating orange fill and white gap
+    var stripeH=4; // px height per stripe
+    var py0=gMapY(0), py1=gMapY(-geoDepthMax);
+    for(var py=py0;py<py1;py+=stripeH*2){
+        // Map pixel y to depth for w(T) fading
+        var depth=((py-GP.t)/(gMapY(-geoDepthMax)-GP.t))*geoDepthMax;
+        var wVal=(wo>=100)?1.0:wF(depth,wo);
+        var al=0.25*wVal+0.04*(1-wVal);
+        geoCtx.fillStyle='rgba(220,150,60,'+al.toFixed(3)+')';
+        geoCtx.fillRect(GP.l,py,PW-GP.l-GP.r,stripeH);
     }
     geoCtx.restore();
-    // Re-clip to plot area (stripe clip was popped)
+    // Re-clip to plot area
     geoCtx.save();geoCtx.beginPath();geoCtx.rect(GP.l,GP.t,PW-GP.l-GP.r,GEO_H-GP.t-GP.b);geoCtx.clip();
 
     // w(T) profile inset on right edge
