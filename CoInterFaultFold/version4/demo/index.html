@@ -163,9 +163,9 @@ function fS(x){
 
 function buildFault(){
     var i,j;
-    for(i=0;i<N_FAULT;i++){var x=i/(N_FAULT-1)*300;xFd[i]=x;zFd[i]=fZ(x);depFd[i]=-zFd[i];thFd[i]=Math.atan2(fS(x),1);}
+    for(i=0;i<N_FAULT;i++){var x=i/(N_FAULT-1)*200;xFd[i]=x;zFd[i]=fZ(x);depFd[i]=-zFd[i];thFd[i]=Math.atan2(fS(x),1);}
     for(i=0;i<N_FAULT;i++){var ct=Math.cos(thFd[i]);xAxFd[i]=Math.abs(ct)>1e-10?xFd[i]+(-zFd[i]/ct)*(-Math.sin(thFd[i])):xFd[i];}
-    for(j=0;j<N_OBS;j++) xObs[j]=0.5+j/(N_OBS-1)*299;
+    for(j=0;j<N_OBS;j++) xObs[j]=0.5+j/(N_OBS-1)*199;
     for(j=0;j<N_OBS;j++){
         var xo=xObs[j],found=false;
         for(i=0;i<N_FAULT-1;i++){
@@ -178,7 +178,7 @@ function buildFault(){
         }
         if(!found){vsZ[j]=Math.abs(Math.sin(thFd[N_FAULT-1]));vsX[j]=Math.cos(thFd[N_FAULT-1]);depObs[j]=depFd[N_FAULT-1];}
     }
-    for(i=0;i<=N_SEG;i++){var x=i/N_SEG*300;xF[i]=x;zF[i]=fZ(x);}
+    for(i=0;i<=N_SEG;i++){var x=i/N_SEG*200;xF[i]=x;zF[i]=fZ(x);}
     for(i=0;i<N_SEG;i++) depthMid[i]=-(zF[i]+zF[i+1])/2;
 }
 
@@ -225,11 +225,12 @@ function update(){
 var vzCtx,vxCtx,geoCtx;
 var VP={l:62,r:20,t:26,b:38}, GP={l:62,r:20,t:14,b:36};
 
-function mapX(x,w){return VP.l+(x/300)*(w-VP.l-VP.r);}
+function mapX(x,w){return VP.l+(x/200)*(w-VP.l-VP.r);}
 function mapVz(v){return VP.t+((1-v)/1.5)*(VZ_H-VP.t-VP.b);}
 function mapVx(v){return VP.t+((1-v)/2.0)*(VX_H-VP.t-VP.b);}
-function gMapX(x){return GP.l+(x/300)*(PW-GP.l-GP.r);}
-function gMapY(z){return GP.t+((-z)/110)*(GEO_H-GP.t-GP.b);}
+function gMapX(x){return GP.l+(x/200)*(PW-GP.l-GP.r);}
+var geoDepthMax=110; // updated per geometry
+function gMapY(z){return GP.t+((-z)/geoDepthMax)*(GEO_H-GP.t-GP.b);}
 
 function curve(ctx,xs,ys,c,w,d){ctx.beginPath();ctx.strokeStyle=c;ctx.lineWidth=w||2;ctx.setLineDash(d||[]);for(var j=0;j<xs.length;j++){if(j===0)ctx.moveTo(xs[j],ys[j]);else ctx.lineTo(xs[j],ys[j]);}ctx.stroke();ctx.setLineDash([]);}
 
@@ -252,7 +253,7 @@ function axes(ctx,xM,yM,xT,yT,w,h,pad,xL,yL){
 function drawPanel(ctx,mapY,H,dataRaw,dataSS,dataCo,dataIn,xT,yT,yLabel){
     var xM=function(x){return mapX(x,PW);};
     axes(ctx,xM,mapY,xT,yT,PW,H,VP,'Distance from trench (km)',yLabel);
-    ctx.strokeStyle='#ddd';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(xM(0),mapY(0));ctx.lineTo(xM(300),mapY(0));ctx.stroke();
+    ctx.strokeStyle='#ddd';ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(xM(0),mapY(0));ctx.lineTo(xM(200),mapY(0));ctx.stroke();
     var px=new Float64Array(N_OBS),pR=new Float64Array(N_OBS),pS=new Float64Array(N_OBS),pC=new Float64Array(N_OBS),pI=new Float64Array(N_OBS);
     for(var j=0;j<N_OBS;j++){px[j]=xM(xObs[j]);pR[j]=mapY(dataRaw[j]);pS[j]=mapY(dataSS[j]);pC[j]=mapY(dataCo[j]);pI[j]=mapY(dataIn[j]);}
     ctx.save();ctx.beginPath();ctx.rect(VP.l,VP.t,PW-VP.l-VP.r,H-VP.t-VP.b);ctx.clip();
@@ -266,19 +267,21 @@ function drawPanel(ctx,mapY,H,dataRaw,dataSS,dataCo,dataIn,xT,yT,yLabel){
 function draw(){
     var ld=+document.getElementById('sl-lock').value, wo=+document.getElementById('sl-wt').value;
     // Vertical
-    drawPanel(vzCtx,mapVz,VZ_H,vsZ,ssZ,coZ,inZ,[0,50,100,150,200,250,300],[-0.4,-0.2,0,0.2,0.4,0.6,0.8,1.0],'vz / s');
+    drawPanel(vzCtx,mapVz,VZ_H,vsZ,ssZ,coZ,inZ,[0,50,100,150,200],[-0.4,-0.2,0,0.2,0.4,0.6,0.8,1.0],'vz / s');
     // Horizontal
-    drawPanel(vxCtx,mapVx,VX_H,vsX,ssX,coX,inX,[0,50,100,150,200,250,300],[-1,-0.5,0,0.5,1.0],'vx / s');
-    // Geometry
-    axes(geoCtx,gMapX,gMapY,[0,50,100,150,200,250,300],[0,-20,-40,-60,-80,-100],PW,GEO_H,GP,'Distance from trench (km)','Depth (km)');
-    geoCtx.strokeStyle='#333';geoCtx.lineWidth=1;geoCtx.beginPath();geoCtx.moveTo(gMapX(0),gMapY(0));geoCtx.lineTo(gMapX(300),gMapY(0));geoCtx.stroke();
+    drawPanel(vxCtx,mapVx,VX_H,vsX,ssX,coX,inX,[0,50,100,150,200],[-1,-0.5,0,0.5,1.0],'vx / s');
+    // Geometry - dynamic depth range
+    geoDepthMax = (geoMode==='himalaya') ? 40 : 110;
+    var geoYticks = (geoMode==='himalaya') ? [0,-10,-20,-30,-40] : [0,-20,-40,-60,-80,-100];
+    axes(geoCtx,gMapX,gMapY,[0,50,100,150,200],geoYticks,PW,GEO_H,GP,'Distance from trench (km)','Depth (km)');
+    geoCtx.strokeStyle='#333';geoCtx.lineWidth=1;geoCtx.beginPath();geoCtx.moveTo(gMapX(0),gMapY(0));geoCtx.lineTo(gMapX(200),gMapY(0));geoCtx.stroke();
     geoCtx.save();geoCtx.beginPath();geoCtx.rect(GP.l,GP.t,PW-GP.l-GP.r,GEO_H-GP.t-GP.b);geoCtx.clip();
     if(wo<95){
-        geoCtx.fillStyle='rgba(255,180,80,0.10)';geoCtx.fillRect(GP.l,gMapY(-wo),PW-GP.l-GP.r,gMapY(-110)-gMapY(-wo));
+        geoCtx.fillStyle='rgba(255,180,80,0.10)';geoCtx.fillRect(GP.l,gMapY(-wo),PW-GP.l-GP.r,gMapY(-geoDepthMax)-gMapY(-wo));
         geoCtx.fillStyle='rgba(180,120,0,0.5)';geoCtx.font='10px sans-serif';geoCtx.textAlign='right';
         geoCtx.fillText('w(z) onset',PW-GP.r-4,gMapY(-wo)-3);
         geoCtx.strokeStyle='rgba(200,140,40,0.6)';geoCtx.lineWidth=1.2;geoCtx.beginPath();
-        for(var d=0;d<=110;d+=0.5){var wV=wF(d,wo),px2=PW-GP.r-2-wV*35,py2=gMapY(-d);if(d===0)geoCtx.moveTo(px2,py2);else geoCtx.lineTo(px2,py2);}
+        for(var d=0;d<=geoDepthMax;d+=0.5){var wV=wF(d,wo),px2=PW-GP.r-2-wV*35,py2=gMapY(-d);if(d===0)geoCtx.moveTo(px2,py2);else geoCtx.lineTo(px2,py2);}
         geoCtx.stroke();
     }
     geoCtx.strokeStyle='rgba(100,100,100,0.4)';geoCtx.lineWidth=1;geoCtx.setLineDash([5,3]);
