@@ -135,28 +135,62 @@ var ssZ=new Float64Array(N_OBS), ssX=new Float64Array(N_OBS);
 var inZ=new Float64Array(N_OBS), inX=new Float64Array(N_OBS);
 
 var geoMode='japan', LIN_DIP=20*Math.PI/180;
-// MHT control points: xctrl=[0,6,83,112,200], zctrl=[-0.01,-3,-12,-21,-29]
-var mhtX=[0,6,83,112,200], mhtZ=[-0.01,-3,-12,-21,-29];
-function mhtInterp(x,arrX,arrZ){
-    if(x<=arrX[0]) return arrZ[0];
-    for(var i=0;i<arrX.length-1;i++){
-        if(x<=arrX[i+1]){var f=(x-arrX[i])/(arrX[i+1]-arrX[i]);return arrZ[i]+f*(arrZ[i+1]-arrZ[i]);}
+
+// === Natural cubic spline for smooth MHT geometry ===
+// Control points from Lave & Avouac (continuous.py)
+var mhtCX=[0,6,83,112,200], mhtCZ=[-0.01,-3,-12,-21,-29];
+var mhtSplineA, mhtSplineB, mhtSplineC, mhtSplineD; // spline coefficients
+
+function buildMhtSpline(){
+    var x=mhtCX, y=mhtCZ, n=x.length-1;
+    var h=new Array(n), al=new Array(n+1), l=new Array(n+1), mu=new Array(n+1), z=new Array(n+1);
+    for(var i=0;i<n;i++) h[i]=x[i+1]-x[i];
+    al[0]=0;
+    for(var i=1;i<n;i++) al[i]=3/h[i]*(y[i+1]-y[i])-3/h[i-1]*(y[i]-y[i-1]);
+    l[0]=1; mu[0]=0; z[0]=0;
+    for(var i=1;i<n;i++){
+        l[i]=2*(x[i+1]-x[i-1])-h[i-1]*mu[i-1];
+        mu[i]=h[i]/l[i];
+        z[i]=(al[i]-h[i-1]*z[i-1])/l[i];
     }
-    // extrapolate flat beyond last control point
-    var n=arrX.length-1;var sl=(arrZ[n]-arrZ[n-1])/(arrX[n]-arrX[n-1]);
-    return arrZ[n]+sl*(x-arrX[n]);
+    l[n]=1; z[n]=0;
+    var c=new Array(n+1), b=new Array(n), d=new Array(n);
+    c[n]=0;
+    for(var j=n-1;j>=0;j--){
+        c[j]=z[j]-mu[j]*c[j+1];
+        b[j]=(y[j+1]-y[j])/h[j]-h[j]*(c[j+1]+2*c[j])/3;
+        d[j]=(c[j+1]-c[j])/(3*h[j]);
+    }
+    mhtSplineA=y.slice(); mhtSplineB=b; mhtSplineC=c; mhtSplineD=d;
 }
-function mhtSlope(x){
-    var dx=0.05;return (mhtInterp(x+dx,mhtX,mhtZ)-mhtInterp(x-dx,mhtX,mhtZ))/(2*dx);
+
+function mhtSplineEval(xq){
+    var x=mhtCX, n=x.length-1;
+    if(xq<=x[0]) return mhtSplineA[0]+mhtSplineB[0]*(xq-x[0]);
+    if(xq>=x[n]){var dx=xq-x[n-1];return mhtSplineA[n-1]+mhtSplineB[n-1]*dx+mhtSplineC[n-1]*dx*dx+mhtSplineD[n-1]*dx*dx*dx;}
+    for(var i=0;i<n;i++){
+        if(xq<=x[i+1]){var dx=xq-x[i];return mhtSplineA[i]+mhtSplineB[i]*dx+mhtSplineC[i]*dx*dx+mhtSplineD[i]*dx*dx*dx;}
+    }
+    return mhtSplineA[n];
+}
+
+function mhtSplineSlope(xq){
+    var x=mhtCX, n=x.length-1;
+    if(xq<=x[0]) return mhtSplineB[0];
+    if(xq>=x[n]){var dx=xq-x[n-1];return mhtSplineB[n-1]+2*mhtSplineC[n-1]*dx+3*mhtSplineD[n-1]*dx*dx;}
+    for(var i=0;i<n;i++){
+        if(xq<=x[i+1]){var dx=xq-x[i];return mhtSplineB[i]+2*mhtSplineC[i]*dx+3*mhtSplineD[i]*dx*dx;}
+    }
+    return 0;
 }
 function fZ(x){
     if(geoMode==='linear') return -x*Math.tan(LIN_DIP);
-    if(geoMode==='himalaya') return mhtInterp(x,mhtX,mhtZ);
+    if(geoMode==='himalaya') return mhtSplineEval(x);
     return -(0.12*x+0.0007*x*x);
 }
 function fS(x){
     if(geoMode==='linear') return -Math.tan(LIN_DIP);
-    if(geoMode==='himalaya') return mhtSlope(x);
+    if(geoMode==='himalaya') return mhtSplineSlope(x);
     return -(0.12+0.0014*x);
 }
 
@@ -226,7 +260,7 @@ var VP={l:62,r:20,t:26,b:38}, GP={l:62,r:20,t:14,b:36};
 
 function mapX(x,w){return VP.l+(x/300)*(w-VP.l-VP.r);}
 function mapVz(v){return VP.t+((1-v)/1.5)*(VZ_H-VP.t-VP.b);}
-function mapVx(v){return VP.t+((1-v)/1.0)*(VX_H-VP.t-VP.b);}
+function mapVx(v){return VP.t+((1-v)/2.0)*(VX_H-VP.t-VP.b);}
 function gMapX(x){return GP.l+(x/300)*(PW-GP.l-GP.r);}
 function gMapY(z){return GP.t+((-z)/110)*(GEO_H-GP.t-GP.b);}
 
@@ -267,7 +301,7 @@ function draw(){
     // Vertical
     drawPanel(vzCtx,mapVz,VZ_H,vsZ,ssZ,coZ,inZ,[0,50,100,150,200,250,300],[-0.4,-0.2,0,0.2,0.4,0.6,0.8,1.0],'vz / s');
     // Horizontal
-    drawPanel(vxCtx,mapVx,VX_H,vsX,ssX,coX,inX,[0,50,100,150,200,250,300],[0,0.2,0.4,0.6,0.8,1.0],'vx / s');
+    drawPanel(vxCtx,mapVx,VX_H,vsX,ssX,coX,inX,[0,50,100,150,200,250,300],[-1,-0.5,0,0.5,1.0],'vx / s');
     // Geometry
     axes(geoCtx,gMapX,gMapY,[0,50,100,150,200,250,300],[0,-20,-40,-60,-80,-100],PW,GEO_H,GP,'Distance from trench (km)','Depth (km)');
     geoCtx.strokeStyle='#333';geoCtx.lineWidth=1;geoCtx.beginPath();geoCtx.moveTo(gMapX(0),gMapY(0));geoCtx.lineTo(gMapX(300),gMapY(0));geoCtx.stroke();
@@ -304,6 +338,7 @@ function init(){
     vzCtx=setupHiDPI(document.getElementById('vz-canvas'),PW,VZ_H);
     vxCtx=setupHiDPI(document.getElementById('vx-canvas'),PW,VX_H);
     geoCtx=setupHiDPI(document.getElementById('geo-canvas'),PW,GEO_H);
+    buildMhtSpline();
     buildFault();precompute();
     ['sl-lock','sl-alpha','sl-wt'].forEach(function(id){document.getElementById(id).addEventListener('input',update);});
     document.getElementById('sel-geo').addEventListener('change',onGeoChange);
