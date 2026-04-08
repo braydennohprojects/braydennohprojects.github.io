@@ -228,7 +228,7 @@ var VP={l:62,r:20,t:26,b:38}, GP={l:62,r:20,t:14,b:36};
 function mapX(x,w){return VP.l+(x/200)*(w-VP.l-VP.r);}
 function mapVz(v){return VP.t+((1-v)/1.5)*(VZ_H-VP.t-VP.b);}
 function mapVx(v){return VP.t+((1-v)/2.0)*(VX_H-VP.t-VP.b);}
-function gMapX(x){return GP.l+(x/200)*(PW-GP.l-GP.r);}
+function gMapX(x){return GP.l+((x+10)/210)*(PW-GP.l-GP.r);}
 var geoDepthMax=110; // updated per geometry
 function gMapY(z){return GP.t+((-z)/geoDepthMax)*(GEO_H-GP.t-GP.b);}
 
@@ -274,20 +274,57 @@ function draw(){
     geoDepthMax = (geoMode==='himalaya') ? 40 : 110;
     var geoYticks = (geoMode==='himalaya') ? [0,-10,-20,-30,-40] : [0,-20,-40,-60,-80,-100];
     axes(geoCtx,gMapX,gMapY,[0,50,100,150,200],geoYticks,PW,GEO_H,GP,'Distance from trench (km)','Depth (km)');
-    geoCtx.strokeStyle='#333';geoCtx.lineWidth=1;geoCtx.beginPath();geoCtx.moveTo(gMapX(0),gMapY(0));geoCtx.lineTo(gMapX(200),gMapY(0));geoCtx.stroke();
+    // surface line
+    geoCtx.strokeStyle='#333';geoCtx.lineWidth=1;
+    geoCtx.beginPath();geoCtx.moveTo(gMapX(-10),gMapY(0));geoCtx.lineTo(gMapX(200),gMapY(0));geoCtx.stroke();
     geoCtx.save();geoCtx.beginPath();geoCtx.rect(GP.l,GP.t,PW-GP.l-GP.r,GEO_H-GP.t-GP.b);geoCtx.clip();
+
+    // --- Footwall hash stripes below fault, fading at w(T) onset ---
+    // Build clipping path: fault trace on top, rectangle on bottom/sides
+    geoCtx.save();
+    geoCtx.beginPath();
+    geoCtx.moveTo(gMapX(xF[0]),gMapY(zF[0]));
+    for(var i=1;i<=N_SEG;i++) geoCtx.lineTo(gMapX(xF[i]),gMapY(zF[i]));
+    geoCtx.lineTo(gMapX(xF[N_SEG]),gMapY(-geoDepthMax));
+    geoCtx.lineTo(gMapX(xF[0]),gMapY(-geoDepthMax));
+    geoCtx.closePath();
+    geoCtx.clip();
+    // Draw diagonal stripes
+    var stripeSpacing=8, stripeAngle=Math.PI/4;
+    var maxPx=PW-GP.r, minPx=GP.l;
+    var maxPy=gMapY(-geoDepthMax), minPy=gMapY(0);
+    var diagLen=Math.sqrt((maxPx-minPx)*(maxPx-minPx)+(maxPy-minPy)*(maxPy-minPy));
+    for(var s=-diagLen;s<diagLen*2;s+=stripeSpacing){
+        var sx=minPx+s, sy=minPy;
+        var ex=sx+diagLen*Math.cos(stripeAngle), ey=sy+diagLen*Math.sin(stripeAngle);
+        // Compute depth at midpoint of stripe for fading
+        var midPy=(sy+ey)/2;
+        // Map pixel y back to depth
+        var midDepth=((midPy-GP.t)/(gMapY(-geoDepthMax)-GP.t))*geoDepthMax;
+        var wVal = (wo>=100) ? 1.0 : wF(midDepth,wo);
+        var alpha=0.12*wVal+0.03*(1-wVal); // fade from 0.12 to 0.03
+        geoCtx.strokeStyle='rgba(210,140,50,'+alpha.toFixed(3)+')';
+        geoCtx.lineWidth=1;
+        geoCtx.beginPath();geoCtx.moveTo(sx,sy);geoCtx.lineTo(ex,ey);geoCtx.stroke();
+    }
+    geoCtx.restore();
+    // Re-clip to plot area (stripe clip was popped)
+    geoCtx.save();geoCtx.beginPath();geoCtx.rect(GP.l,GP.t,PW-GP.l-GP.r,GEO_H-GP.t-GP.b);geoCtx.clip();
+
+    // w(T) profile inset on right edge
     if(wo<95){
-        geoCtx.fillStyle='rgba(255,180,80,0.10)';geoCtx.fillRect(GP.l,gMapY(-wo),PW-GP.l-GP.r,gMapY(-geoDepthMax)-gMapY(-wo));
         geoCtx.fillStyle='rgba(180,120,0,0.5)';geoCtx.font='10px sans-serif';geoCtx.textAlign='right';
         geoCtx.fillText('w(z) onset',PW-GP.r-4,gMapY(-wo)-3);
         geoCtx.strokeStyle='rgba(200,140,40,0.6)';geoCtx.lineWidth=1.2;geoCtx.beginPath();
         for(var d=0;d<=geoDepthMax;d+=0.5){var wV=wF(d,wo),px2=PW-GP.r-2-wV*35,py2=gMapY(-d);if(d===0)geoCtx.moveTo(px2,py2);else geoCtx.lineTo(px2,py2);}
         geoCtx.stroke();
     }
+    // locking depth line
     geoCtx.strokeStyle='rgba(100,100,100,0.4)';geoCtx.lineWidth=1;geoCtx.setLineDash([5,3]);
     geoCtx.beginPath();geoCtx.moveTo(GP.l,gMapY(-ld));geoCtx.lineTo(PW-GP.r,gMapY(-ld));geoCtx.stroke();
     geoCtx.setLineDash([]);geoCtx.fillStyle='#888';geoCtx.font='10px sans-serif';geoCtx.textAlign='left';
     geoCtx.fillText('Lock '+ld+' km',GP.l+4,gMapY(-ld)-3);
+    // fault trace: locked (blue) + creeping (red)
     var li=N_SEG;for(var i=0;i<N_SEG;i++){if(depthMid[i]>=ld){li=i;break;}}
     geoCtx.beginPath();geoCtx.strokeStyle='steelblue';geoCtx.lineWidth=2.8;geoCtx.moveTo(gMapX(xF[0]),gMapY(zF[0]));
     for(var i=1;i<=Math.min(li+1,N_SEG);i++) geoCtx.lineTo(gMapX(xF[i]),gMapY(zF[i]));geoCtx.stroke();
