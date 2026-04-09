@@ -93,7 +93,7 @@ canvas{display:block;margin:0 auto;background:#fff}
 
 <script>
 var DPR = window.devicePixelRatio || 1;
-var PW = 860, VZ_H = 320, VX_H = 320, GEO_H = 220;
+var PW = 860, VZ_H = 220, VX_H = 220, GEO_H = 200;
 
 function setupHiDPI(canvas, w, h) {
     canvas.width = w * DPR; canvas.height = h * DPR;
@@ -180,6 +180,62 @@ function buildFault(){
     }
     for(i=0;i<=N_SEG;i++){var x=i/N_SEG*200;xF[i]=x;zF[i]=fZ(x);}
     for(i=0;i<N_SEG;i++) depthMid[i]=-(zF[i]+zF[i+1])/2;
+    computeParticlePaths();
+}
+
+// === Particle paths for folded-layer stripes ===
+var N_PARTICLES=21, N_PGRID=300;
+var particleGrid=new Float64Array(N_PGRID);
+var particleZ=[];
+
+function tracePath(z0,x_start,xfc,zfc,thfc,nfc){
+    if(z0>=-0.01)return{x:[x_start,-10],z:[0,0]};
+    var xc=x_start,zc=z0,px=[xc],pz=[zc],dx=-0.5;
+    for(var iter=0;iter<2000;iter++){
+        if(xc<-10||zc>=0)break;
+        var bestTh=thfc[nfc-1],minR=1e9,foundR=false;
+        var minL=1e9,bestThL=thfc[nfc-1],nKeep=0;
+        for(var i=0;i<nfc;i++){
+            if(zfc[i]>zc+0.01)continue;
+            nKeep++;
+            var tn=Math.tan(thfc[i]);
+            if(tn>50)tn=50;if(tn<-50)tn=-50;
+            var xa=xfc[i]+(zfc[i]-zc)*tn;
+            if(xa>=xc){if(xa<minR){minR=xa;bestTh=thfc[i];foundR=true;}}
+            if(xa<minL){minL=xa;bestThL=thfc[i];}
+        }
+        if(nKeep<2){xc+=dx;px.push(xc);pz.push(zc);continue;}
+        if(!foundR)bestTh=bestThL;
+        var tb=Math.tan(bestTh);
+        if(tb>50)tb=50;if(tb<-50)tb=-50;
+        var dz=dx*tb,xn=xc+dx,zn=zc+dz;
+        if(zn>=0&&Math.abs(dz)>1e-15){
+            var fr=-zc/dz;xn=xc+fr*dx;zn=0;
+            px.push(xn);pz.push(zn);break;
+        }
+        xc=xn;zc=zn;px.push(xc);pz.push(zc);
+    }
+    return{x:px,z:pz};
+}
+
+function computeParticlePaths(){
+    var x_start=200,z_start=fZ(x_start),i,p;
+    for(i=0;i<N_PGRID;i++) particleGrid[i]=-10+i/(N_PGRID-1)*210;
+    var NFC=300;
+    var xfc=new Float64Array(NFC),zfc=new Float64Array(NFC),thfc=new Float64Array(NFC);
+    for(i=0;i<NFC;i++){var x=i/(NFC-1)*200;xfc[i]=x;zfc[i]=fZ(x);thfc[i]=Math.atan2(fS(x),1);}
+    particleZ=[];
+    for(p=0;p<N_PARTICLES;p++){
+        var z0=-0.5+p/(N_PARTICLES-1)*(z_start+0.5);
+        var pp=tracePath(z0,x_start,xfc,zfc,thfc,NFC);
+        var n=pp.x.length,rx=new Array(n),rz=new Array(n);
+        for(i=0;i<n;i++){rx[i]=pp.x[n-1-i];rz[i]=pp.z[n-1-i];}
+        var interped=new Float64Array(N_PGRID);
+        for(i=0;i<N_PGRID;i++){
+            interped[i]=Math.min(linterp(particleGrid[i],rx,rz),0);
+        }
+        particleZ.push(interped);
+    }
 }
 
 function precompute(){
@@ -279,26 +335,31 @@ function draw(){
     geoCtx.beginPath();geoCtx.moveTo(gMapX(-10),gMapY(0));geoCtx.lineTo(gMapX(200),gMapY(0));geoCtx.stroke();
     geoCtx.save();geoCtx.beginPath();geoCtx.rect(GP.l,GP.t,PW-GP.l-GP.r,GEO_H-GP.t-GP.b);geoCtx.clip();
 
-    // --- Hanging wall: horizontal orange-white stripes between surface and fault ---
+    // --- Hanging wall: orange-white stripes following fault geometry (particle paths) ---
     geoCtx.save();
-    // Clip to hanging wall wedge: surface on top, fault on bottom
     geoCtx.beginPath();
     geoCtx.moveTo(gMapX(-10),gMapY(0));
-    geoCtx.lineTo(gMapX(xF[N_SEG]),gMapY(0));
-    // trace fault backwards (bottom boundary)
+    geoCtx.lineTo(gMapX(200),gMapY(0));
     for(var i=N_SEG;i>=0;i--) geoCtx.lineTo(gMapX(xF[i]),gMapY(zF[i]));
     geoCtx.closePath();
     geoCtx.clip();
-    // Horizontal stripes: alternating orange fill and white gap
-    var stripeH=4; // px height per stripe
-    var py0=gMapY(0), py1=gMapY(-geoDepthMax);
-    for(var py=py0;py<py1;py+=stripeH*2){
-        // Map pixel y to depth for w(T) fading
-        var depth=((py-GP.t)/(gMapY(-geoDepthMax)-GP.t))*geoDepthMax;
-        var wVal=(wo>=100)?1.0:wF(depth,wo);
-        var al=0.25*wVal+0.04*(1-wVal);
-        geoCtx.fillStyle='rgba(220,150,60,'+al.toFixed(3)+')';
-        geoCtx.fillRect(GP.l,py,PW-GP.l-GP.r,stripeH);
+    if(particleZ.length>1){
+        for(var p=0;p<particleZ.length-1;p++){
+            geoCtx.beginPath();
+            geoCtx.moveTo(gMapX(particleGrid[0]),gMapY(particleZ[p][0]));
+            for(var i=1;i<N_PGRID;i++) geoCtx.lineTo(gMapX(particleGrid[i]),gMapY(particleZ[p][i]));
+            for(var i=N_PGRID-1;i>=0;i--) geoCtx.lineTo(gMapX(particleGrid[i]),gMapY(particleZ[p+1][i]));
+            geoCtx.closePath();
+            geoCtx.fillStyle=(p%2===0)?'rgba(255,108,12,0.55)':'rgba(255,255,255,0.9)';
+            geoCtx.fill();
+        }
+        geoCtx.strokeStyle='rgba(0,0,0,0.15)';geoCtx.lineWidth=0.5;
+        for(var p=0;p<particleZ.length;p++){
+            geoCtx.beginPath();
+            geoCtx.moveTo(gMapX(particleGrid[0]),gMapY(particleZ[p][0]));
+            for(var i=1;i<N_PGRID;i++) geoCtx.lineTo(gMapX(particleGrid[i]),gMapY(particleZ[p][i]));
+            geoCtx.stroke();
+        }
     }
     geoCtx.restore();
     // Re-clip to plot area
