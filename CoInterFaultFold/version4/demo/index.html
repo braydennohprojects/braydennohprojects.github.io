@@ -44,18 +44,18 @@ canvas{display:block;margin:0 auto;background:#fff}
   <input type="range" id="sl-alpha" min="0" max="1" step="0.01" value="1">
   <span class="val" id="v-alpha">1.00</span>
   <label>\(w(z)\) onset</label>
-  <input type="range" id="sl-wt" min="10" max="100" step="1" value="100">
-  <span class="val" id="v-wt">100 km</span>
+  <input type="range" id="sl-wt" min="10" max="80" step="1" value="80">
+  <span class="val" id="v-wt">80 km</span>
   <label>\(w(z)\) width</label>
   <input type="range" id="sl-wsc" min="1" max="30" step="1" value="5">
   <span class="val" id="v-wsc">5 km</span>
   <label>Geometry</label>
   <select id="sel-geo" style="font-size:13px;padding:2px 6px">
     <option value="japan">NE Japan (curved)</option>
-    <option value="linear">Linear 20&deg;</option>
+    <option value="linear" selected>Linear 20&deg;</option>
     <option value="himalaya">Himalayas (MHT)</option>
   </select>
-  <span class="val" id="v-geo">NE Japan</span>
+  <span class="val" id="v-geo">Linear 20°</span>
 </div>
 </div>
 
@@ -102,7 +102,7 @@ var coZ=new Float64Array(N_OBS), coX=new Float64Array(N_OBS);
 var ssZ=new Float64Array(N_OBS), ssX=new Float64Array(N_OBS);
 var inZ=new Float64Array(N_OBS), inX=new Float64Array(N_OBS);
 
-var geoMode='japan', LIN_DIP=20*Math.PI/180;
+var geoMode='linear', LIN_DIP=20*Math.PI/180;
 
 // === MHT geometry: 500 precomputed points from C2 quintic-patch (SmoothFault.from_c2) ===
 // Control points: [0,-0.01],[6,-3],[83,-12],[112,-21],[200,-29], w_blend=8 km
@@ -218,8 +218,8 @@ function precompute(){
 }
 
 // === w(z) ===
-var W_SC=5;
-function wF(d,on){if(on>=100)return 1;return 0.5-(1/Math.PI)*Math.atan((d-on)/W_SC);}
+var W_SC=5, wOnsetMax=80;
+function wF(d,on){if(on>=wOnsetMax)return 1;return 0.5-(1/Math.PI)*Math.atan((d-on)/W_SC);}
 
 // === Update ===
 function update(){
@@ -376,6 +376,10 @@ function onGeoChange(){
     geoMode=document.getElementById('sel-geo').value;
     var labels={japan:'NE Japan',linear:'Linear 20\u00B0',himalaya:'Himalayas'};
     document.getElementById('v-geo').textContent=labels[geoMode]||geoMode;
+    wOnsetMax=(geoMode==='himalaya')?40:80;
+    var sl=document.getElementById('sl-wt');
+    sl.max=wOnsetMax;sl.value=wOnsetMax;
+    document.getElementById('v-wt').textContent=wOnsetMax+' km';
     rebuildAll();
 }
 function init(){
@@ -386,12 +390,6 @@ function init(){
     ['sl-lock','sl-alpha','sl-wt','sl-wsc'].forEach(function(id){document.getElementById(id).addEventListener('input',update);});
     document.getElementById('sel-geo').addEventListener('change',onGeoChange);
     update();
-    setInterval(function(){
-        var sl=document.getElementById('sl-lock');
-        var v=(+sl.value+1)%81;
-        sl.value=v;
-        update();
-    },1000);
 }
 window.addEventListener('DOMContentLoaded',init);
 </script>
