@@ -54,6 +54,7 @@ canvas{display:block;margin:0 auto;background:#fff}
     <option value="japan">NE Japan (curved)</option>
     <option value="linear" selected>Linear 20&deg;</option>
     <option value="himalaya">Himalayas (MHT)</option>
+    <option value="faultbend">Fault-bend fold</option>
   </select>
   <span class="val" id="v-geo">Linear 20°</span>
 </div>
@@ -120,11 +121,13 @@ function linterp(xq,ax,ay){
 }
 function fZ(x){
     if(geoMode==='linear') return -x*Math.tan(LIN_DIP);
+    if(geoMode==='faultbend') return (x<=50)?-x*Math.tan(LIN_DIP):-50*Math.tan(LIN_DIP);
     if(geoMode==='himalaya') return linterp(x,mhtPx,mhtPz);
     return -(0.12*x+0.0007*x*x);
 }
 function fS(x){
     if(geoMode==='linear') return -Math.tan(LIN_DIP);
+    if(geoMode==='faultbend') return (x<=50)?-Math.tan(LIN_DIP):0;
     if(geoMode==='himalaya') return linterp(x,mhtPx,mhtPs);
     return -(0.12+0.0014*x);
 }
@@ -297,8 +300,8 @@ function draw(){
     // Horizontal
     drawPanel(vxCtx,mapVx,VX_H,vsX,ssX,coX,inX,[0,50,100,150,200],[-1,-0.5,0,0.5,1.0],'vx / s');
     // Geometry - dynamic depth range
-    geoDepthMax = (geoMode==='himalaya') ? 40 : 80;
-    var geoYticks = (geoMode==='himalaya') ? [0,-10,-20,-30,-40] : [0,-20,-40,-60,-80];
+    geoDepthMax = (geoMode==='himalaya')?40:(geoMode==='faultbend')?30:80;
+    var geoYticks = (geoMode==='himalaya')?[0,-10,-20,-30,-40]:(geoMode==='faultbend')?[0,-10,-20,-30]:[0,-20,-40,-60,-80];
     axes(geoCtx,gMapX,gMapY,[0,50,100,150,200],geoYticks,PW,GEO_H,GP,'Distance from trench (km)','Depth (km)');
     // surface line
     geoCtx.strokeStyle='#333';geoCtx.lineWidth=1;
@@ -374,9 +377,9 @@ function draw(){
 function rebuildAll(){buildFault();precompute();update();}
 function onGeoChange(){
     geoMode=document.getElementById('sel-geo').value;
-    var labels={japan:'NE Japan',linear:'Linear 20\u00B0',himalaya:'Himalayas'};
+    var labels={japan:'NE Japan',linear:'Linear 20\u00B0',himalaya:'Himalayas',faultbend:'Fault-bend fold'};
     document.getElementById('v-geo').textContent=labels[geoMode]||geoMode;
-    wOnsetMax=(geoMode==='himalaya')?40:80;
+    wOnsetMax=(geoMode==='himalaya')?40:(geoMode==='faultbend')?30:80;
     var sl=document.getElementById('sl-wt');
     sl.max=wOnsetMax;sl.value=wOnsetMax;
     document.getElementById('v-wt').textContent=wOnsetMax+' km';
