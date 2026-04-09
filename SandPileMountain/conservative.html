@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Gradient Sandpile</title>
+<title>Conservative Sandpile</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
@@ -205,13 +205,46 @@ nav a:hover { text-decoration:underline; }
   <!-- ════ SIDEBAR (sticky) ════ -->
   <aside class="sidebar">
     <h1>Conservative Sandpile</h1>
+    <p>A sandpile where toppling depends on the relative height
+       to Moore neighbours.</p>
+    <hr class="separator">
+    <p><strong>Rule:</strong> find the steepest neighbour. If
+       &Delta;<em>z</em>&thinsp;&ge;&thinsp;threshold, transfer
+       <em>give</em> blocks to that neighbour.</p>
+    <hr class="separator">
+    <p><strong>D4:</strong> 4 cardinal neighbours.<br>
+       <strong>D8:</strong> all 8 neighbours (Moore).<br>
+       <strong>Voronoi:</strong> ~1000 random cells, no directional bias.</p>
+    <hr class="separator">
+    <p style="font-size:12px;color:#999">
+       Material is conserved. Edge cells drain when height &ge; threshold
+       but no neighbour qualifies. By Brayden Noh.</p>
   </aside>
 
   <!-- ════ MAIN CONTENT ════ -->
   <main class="main">
 
     <!-- ──────── Section 1: Rule ──────── -->
+    <h2 class="section-title">Toppling Rule</h2>
+    <div class="rule-box">
+      For each cell <em>i</em> with height <em>z<sub>i</sub></em>,
+      find the neighbour <em>j</em>* with the largest height difference:<br>
+      <span class="mono">&Delta;z = z<sub>i</sub> &minus; z<sub>j*</sub> = max<sub>j &in; neighbours</sub>(z<sub>i</sub> &minus; z<sub>j</sub>)</span><br><br>
+      If <span class="mono">&Delta;z &ge; threshold</span>:<br>
+      &emsp; <span class="mono">z<sub>i</sub> &larr; z<sub>i</sub> &minus; give</span><br>
+      &emsp; <span class="mono">z<sub>j*</sub> &larr; z<sub>j*</sub> + give</span><br><br>
+      Repeat until no cell can topple (relaxation).<br>
+      Default: <span class="mono">threshold = 4</span>, <span class="mono">give = 2</span>
+    </div>
+
+    <hr class="separator">
+
+    <!-- ──────── Section 2: Interactive Demo ──────── -->
     <h2 class="section-title">Interactive Demo</h2>
+    <p style="font-size:14px;color:#555;margin-bottom:8px">
+      Click any cell to drop a block (+1). When &Delta;z &ge; 4 to a neighbour,
+      the cell topples (loses 2, steepest neighbour gains 2). Cascades animate step by step.
+      Uses D8 (all 8 neighbours).</p>
 
     <div class="demo-wrap">
       <div class="demo-grid" id="demo-grid"></div>
@@ -225,6 +258,11 @@ nav a:hover { text-decoration:underline; }
 
     <!-- ──────── Section 3: Full Simulation ──────── -->
     <h2 class="section-title">Full Simulation</h2>
+    <p style="font-size:14px;color:#555;margin-bottom:8px">
+      Left: surface height. Right: D8 flow accumulation &mdash; each cell starts with
+      1 unit of flow, routed to its steepest descent neighbour. Cells are sorted by
+      elevation (highest first) and flow is passed downstream, accumulating at
+      convergence points.</p>
 
     <div id="sim-info">thresh=4, give=2 (D8) &ensp;|&ensp; t=0 &ensp;|&ensp;
       Z:&thinsp;[0,&thinsp;0] &ensp;|&ensp; toppled:&thinsp;0</div>
