@@ -31,9 +31,9 @@ canvas{display:block;margin:0 auto;background:#fff}
 <canvas id="geo-canvas"></canvas>
 <div id="legend">
   <div class="legend-item"><div class="legend-swatch" style="background:#222"></div>Steady-state</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:steelblue"></div>v<sub>co</sub> (locked)</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:firebrick"></div>Interseismic</div>
-  <div class="legend-item"><div class="legend-swatch" style="background:#bbb"></div>v<sub>struct</sub> (raw)</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#2266cc"></div>Coseismic</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#cc2222"></div>Interseismic</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#bbb"></div>Structural uplift</div>
 </div>
 <div id="info"></div>
 <div class="slider-grid">
@@ -287,9 +287,9 @@ function drawPanel(ctx,mapY,H,dataRaw,dataSS,dataCo,dataIn,xT,yT,yLabel){
     for(var j=0;j<N_OBS;j++){px[j]=xM(xObs[j]);pR[j]=mapY(dataRaw[j]);pS[j]=mapY(dataSS[j]);pC[j]=mapY(dataCo[j]);pI[j]=mapY(dataIn[j]);}
     ctx.save();ctx.beginPath();ctx.rect(VP.l,VP.t,PW-VP.l-VP.r,H-VP.t-VP.b);ctx.clip();
     curve(ctx,px,pR,'#ccc',1.3,[4,4]);
-    curve(ctx,px,pC,'steelblue',2.2);
+    curve(ctx,px,pC,'#2266cc',2.2);
     curve(ctx,px,pS,'#222',2.2,[7,4]);
-    curve(ctx,px,pI,'firebrick',2.5);
+    curve(ctx,px,pI,'#cc2222',2.5);
     ctx.restore();
 }
 
@@ -366,9 +366,9 @@ function draw(){
     geoCtx.fillText('Lock '+ld+' km',GP.l+4,gMapY(-ld)-3);
     // fault trace: locked (blue) + creeping (red)
     var li=N_SEG;for(var i=0;i<N_SEG;i++){if(depthMid[i]>=ld){li=i;break;}}
-    geoCtx.beginPath();geoCtx.strokeStyle='steelblue';geoCtx.lineWidth=2.8;geoCtx.moveTo(gMapX(xF[0]),gMapY(zF[0]));
+    geoCtx.beginPath();geoCtx.strokeStyle='#2266cc';geoCtx.lineWidth=2.8;geoCtx.moveTo(gMapX(xF[0]),gMapY(zF[0]));
     for(var i=1;i<=Math.min(li+1,N_SEG);i++) geoCtx.lineTo(gMapX(xF[i]),gMapY(zF[i]));geoCtx.stroke();
-    if(li<N_SEG){geoCtx.beginPath();geoCtx.strokeStyle='firebrick';geoCtx.lineWidth=2.8;geoCtx.moveTo(gMapX(xF[li+1]),gMapY(zF[li+1]));
+    if(li<N_SEG){geoCtx.beginPath();geoCtx.strokeStyle='#cc2222';geoCtx.lineWidth=2.8;geoCtx.moveTo(gMapX(xF[li+1]),gMapY(zF[li+1]));
     for(var i=li+2;i<=N_SEG;i++) geoCtx.lineTo(gMapX(xF[i]),gMapY(zF[i]));geoCtx.stroke();}
     geoCtx.restore();
 }
