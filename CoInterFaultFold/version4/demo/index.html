@@ -256,7 +256,8 @@ var VP={l:62,r:20,t:26,b:38}, GP={l:62,r:20,t:14,b:36};
 
 function mapX(x,w){return VP.l+((x+10)/210)*(w-VP.l-VP.r);}
 function mapVz(v){return VP.t+((1-v)/1.5)*(VZ_H-VP.t-VP.b);}
-function mapVx(v){return VP.t+((1-v)/2.0)*(VX_H-VP.t-VP.b);}
+var vxMax=1.0;
+function mapVx(v){return VP.t+((vxMax-v)/(2*vxMax))*(VX_H-VP.t-VP.b);}
 function gMapX(x){return GP.l+((x+10)/210)*(PW-GP.l-GP.r);}
 var geoDepthMax=110; // updated per geometry
 function gMapY(z){return GP.t+((-z)/geoDepthMax)*(GEO_H-GP.t-GP.b);}
@@ -298,7 +299,9 @@ function draw(){
     // Vertical
     drawPanel(vzCtx,mapVz,VZ_H,vsZ,ssZ,coZ,inZ,[0,50,100,150,200],[-0.4,-0.2,0,0.2,0.4,0.6,0.8,1.0],'vz / s');
     // Horizontal
-    drawPanel(vxCtx,mapVx,VX_H,vsX,ssX,coX,inX,[0,50,100,150,200],[-1,-0.5,0,0.5,1.0],'vx / s');
+    vxMax=(geoMode==='himalaya')?1.2:1.0;
+    var vxTicks=[];for(var v=-vxMax;v<=vxMax+0.01;v+=0.2)vxTicks.push(Math.round(v*10)/10);
+    drawPanel(vxCtx,mapVx,VX_H,vsX,ssX,coX,inX,[0,50,100,150,200],vxTicks,'vx / s');
     // Geometry - dynamic depth range
     geoDepthMax = (geoMode==='himalaya')?40:(geoMode==='faultbend')?30:80;
     var geoYticks = (geoMode==='himalaya')?[0,-10,-20,-30,-40]:(geoMode==='faultbend')?[0,-10,-20,-30]:[0,-20,-40,-60,-80];
