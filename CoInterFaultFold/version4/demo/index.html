@@ -121,13 +121,13 @@ function linterp(xq,ax,ay){
 }
 function fZ(x){
     if(geoMode==='linear') return -x*Math.tan(LIN_DIP);
-    if(geoMode==='faultbend') return (x<=50)?-x*Math.tan(LIN_DIP):-50*Math.tan(LIN_DIP);
+    if(geoMode==='faultbend'){var d=Math.tan(LIN_DIP),xb=50,w=5;if(x<=xb-w)return -x*d;if(x>=xb+w)return -xb*d;var t=(x-(xb-w))/(2*w);return -(xb-w)*d-2*w*d*(t-t*t*t+t*t*t*t/2);}
     if(geoMode==='himalaya') return linterp(x,mhtPx,mhtPz);
     return -(0.12*x+0.0007*x*x);
 }
 function fS(x){
     if(geoMode==='linear') return -Math.tan(LIN_DIP);
-    if(geoMode==='faultbend') return (x<=50)?-Math.tan(LIN_DIP):0;
+    if(geoMode==='faultbend'){var d=Math.tan(LIN_DIP),xb=50,w=5;if(x<=xb-w)return -d;if(x>=xb+w)return 0;var t=(x-(xb-w))/(2*w);return -d*(1-3*t*t+2*t*t*t);}
     if(geoMode==='himalaya') return linterp(x,mhtPx,mhtPs);
     return -(0.12+0.0014*x);
 }
