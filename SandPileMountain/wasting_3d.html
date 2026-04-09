@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Wasting Sandpile — 3D</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: sans-serif;
+  background: #fff;
+  color: #222;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 16px;
+  background: #f8f8f8;
+  border-bottom: 1px solid #ddd;
+}
+#header h1 { font-size: 17px; font-weight: 400; color: #333; }
+#sim-info { font-family: monospace; font-size: 12px; color: #888; }
+#viz-container {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+#canvas3d {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.view-label {
+  position: absolute;
+  top: 8px;
+  font-size: 13px;
+  color: rgba(80,80,100,0.6);
+  pointer-events: none;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 11px;
+}
+.divider {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(0,0,0,0.1);
+  pointer-events: none;
+}
+#controls {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: #f8f8f8;
+  border-top: 1px solid #ddd;
+  font-size: 13px;
+}
+#controls button {
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #bbb;
+  border-radius: 3px;
+}
+#controls button:hover { background: #e0e0e0; }
+.cg {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cg label { color: #555; font-size: 12px; }
+.cg input[type="range"] { width: 70px; }
+.cv { font-family: monospace; font-size: 11px; color: #666; min-width: 30px; text-align: right; }
+.sep { color: #ccc; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Wasting Sandpile &mdash; 3D</h1>
+  <span id="sim-info">thresh=4, give=2 | t=0 | Z:[0,0] | wasted: 0</span>
+</div>
+
+<div id="viz-container">
+  <canvas id="canvas3d"></canvas>
+  <div class="view-label" style="left:25%;transform:translateX(-50%)">Elevation</div>
+  <div class="view-label" style="left:75%;transform:translateX(-50%)">Flow Accumulation</div>
+  <div class="divider" style="left:50%"></div>
+</div>
+
+<div id="controls">
+  <button id="btn-play">&#9654; Play</button>
+  <button id="btn-pause">&#9724; Pause</button>
+  <button id="btn-reset">Reset</button>
+  <span class="sep">|</span>
+  <div class="cg"><label>Thresh</label><input type="range" id="sl-thresh" min="1" max="20" value="4"><span class="cv" id="v-thresh">4</span></div>
+  <div class="cg"><label>Give</label><input type="range" id="sl-give" min="1" max="20" value="2"><span class="cv" id="v-give">2</span></div>
+  <div class="cg"><label>Drop%</label><input type="range" id="sl-drops" min="1" max="100" value="5"><span class="cv" id="v-drops">5%</span></div>
+  <div class="cg"><label>Delay</label><input type="range" id="sl-delay" min="0" max="500" step="10" value="50"><span class="cv" id="v-delay">50</span></div>
+  <div class="cg"><label>Grid</label><input type="range" id="sl-size" min="50" max="400" step="50" value="100"><span class="cv" id="v-size">100</span></div>
+  <div class="cg"><label>V.Exag</label><input type="range" id="sl-exag" min="1" max="200" step="1" value="30"><span class="cv" id="v-exag">30</span></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ═══════════════════════════
+   Worker
+   ═══════════════════════════ */
+const workerSrc = `
+'use strict';
+var NR,NC,TH=4,GIVE=2,dropPct=5;
+var Z,cum,step=0,totalWasted=0;
+var NB8=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+var scanOrder;
+function shuffle(a){for(var i=a.length-1;i>0;i--){var j=(Math.random()*(i+1))|0;var t=a[i];a[i]=a[j];a[j]=t;}}
+function init(nr,nc){
+  NR=nr;NC=nc;
+  Z=new Int32Array(NR*NC);cum=new Int32Array(NR*NC);
+  scanOrder=new Array(NR*NC);
+  for(var i=0;i<NR*NC;i++) scanOrder[i]=i;
+  step=0;totalWasted=0;
+}
+function drop(){
+  var th=dropPct/100;
+  for(var i=0;i<NR*NC;i++) if(Math.random()<th) Z[i]++;
+}
+function topple(){
+  var changed=true,passes=0;
+  while(changed){
+    changed=false;passes++;shuffle(scanOrder);
+    for(var si=0;si<NR*NC;si++){
+      var idx=scanOrder[si],r=(idx/NC)|0,j=idx%NC;
+      var dzMax=0;
+      for(var k=0;k<8;k++){
+        var nr2=r+NB8[k][0],nj2=j+NB8[k][1];
+        if(nr2<0||nr2>=NR||nj2<0||nj2>=NC) continue;
+        var dz=Z[idx]-Z[nr2*NC+nj2];
+        if(dz>dzMax) dzMax=dz;
+      }
+      if(r===0||r===NR-1||j===0||j===NC-1){var dzB=Z[idx];if(dzB>dzMax) dzMax=dzB;}
+      if(dzMax>=TH){
+        var rem=GIVE;if(rem>Z[idx])rem=Z[idx];
+        Z[idx]-=rem;totalWasted+=rem;cum[idx]+=rem;changed=true;
+      }
+    }
+    if(passes>400) break;
+  }
+}
+function flowAcc(){
+  var n=NR*NC,recv=new Int32Array(n);
+  for(var r=0;r<NR;r++) for(var j=0;j<NC;j++){
+    var i=r*NC+j;recv[i]=i;var dzMax=0;
+    for(var k=0;k<8;k++){
+      var nr2=r+NB8[k][0],nj2=j+NB8[k][1];
+      if(nr2<0||nr2>=NR||nj2<0||nj2>=NC) continue;
+      var nI=nr2*NC+nj2,dz=Z[i]-Z[nI];
+      if(dz>dzMax){dzMax=dz;recv[i]=nI;}
+    }
+  }
+  var order=new Array(n);for(var i=0;i<n;i++) order[i]=i;
+  order.sort(function(a,b){return Z[b]-Z[a];});
+  var acc=new Int32Array(n);for(var i=0;i<n;i++) acc[i]=1;
+  for(var k2=0;k2<n;k2++){var i=order[k2],rc=recv[i];if(rc!==i) acc[rc]+=acc[i];}
+  return acc;
+}
+function snap(){
+  var minH=1e9,maxH=0;
+  for(var i=0;i<NR*NC;i++){if(Z[i]<minH)minH=Z[i];if(Z[i]>maxH)maxH=Z[i];}
+  if(NR*NC===0) minH=0;
+  var acc=flowAcc();
+  var maxA=0;for(var i=0;i<NR*NC;i++) if(acc[i]>maxA) maxA=acc[i];
+  self.postMessage({type:'frame',Z:new Int32Array(Z).buffer,acc:acc.buffer,
+    step:step,minH:minH,maxH:maxH,maxA:maxA,totalWasted:totalWasted,NR:NR,NC:NC},
+    [new Int32Array(Z).buffer,acc.buffer]);
+}
+self.onmessage=function(e){
+  var d=e.data;
+  if(d.cmd==='init'){init(d.NR,d.NC);if(d.dropPct!==undefined)dropPct=d.dropPct;if(d.TH!==undefined)TH=d.TH;if(d.GIVE!==undefined)GIVE=d.GIVE;snap();}
+  if(d.cmd==='step'){step++;drop();topple();snap();}
+  if(d.cmd==='reset'){Z.fill(0);cum.fill(0);step=0;totalWasted=0;snap();}
+  if(d.cmd==='setDrops') dropPct=d.value;
+  if(d.cmd==='setTH') TH=d.value;
+  if(d.cmd==='setGIVE') GIVE=d.value;
+};
+`;
+const worker = new Worker(URL.createObjectURL(new Blob([workerSrc],{type:'text/javascript'})));
+
+/* ═══════════════════════════
+   Colormaps
+   ═══════════════════════════ */
+function lerp3(stops,t){
+  t=Math.max(0,Math.min(1,t));
+  for(let i=0;i<stops.length-1;i++){
+    if(t<=stops[i+1][0]){
+      const f=(t-stops[i][0])/(stops[i+1][0]-stops[i][0]);
+      return[stops[i][1]+(stops[i+1][1]-stops[i][1])*f,
+             stops[i][2]+(stops[i+1][2]-stops[i][2])*f,
+             stops[i][3]+(stops[i+1][3]-stops[i][3])*f];
+    }
+  }
+  const l=stops[stops.length-1];return[l[1],l[2],l[3]];
+}
+const ICE=[[0,.02,.07,.15],[.15,.06,.17,.35],[.3,.1,.3,.55],[.45,.2,.47,.72],
+           [.6,.4,.65,.82],[.75,.65,.82,.91],[.9,.85,.93,.97],[1,.97,.98,1]];
+const ICE_R=[[0,.97,.98,1],[.1,.85,.93,.97],[.25,.65,.82,.91],[.4,.4,.65,.82],
+             [.55,.2,.47,.72],[.7,.1,.3,.55],[.85,.06,.17,.35],[1,.02,.07,.15]];
+function iceRGB(t){return lerp3(ICE,t);}
+function iceRevRGB(t){return lerp3(ICE_R,t);}
+
+/* ═══════════════════════════
+   Three.js setup
+   ═══════════════════════════ */
+const canvas = document.getElementById('canvas3d');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setClearColor(0xffffff);
+renderer.setPixelRatio(window.devicePixelRatio);
+
+const camera = new THREE.PerspectiveCamera(45,1,0.1,1000);
+camera.position.set(8,10,8);
+
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0,0,0);
+controls.enableDamping=true;
+controls.dampingFactor=0.08;
+
+const sceneE = new THREE.Scene();
+const sceneD = new THREE.Scene();
+
+[sceneE,sceneD].forEach(s=>{
+  s.add(new THREE.AmbientLight(0xffffff,1.5));
+  const dl=new THREE.DirectionalLight(0xffffff,1.0);
+  dl.position.set(5,10,3);
+  s.add(dl);
+  const grd=new THREE.GridHelper(10,10,0xdddddd,0xeeeeee);
+  grd.position.y=-0.01;
+  s.add(grd);
+});
+
+/* ═══════════════════════════
+   Mesh
+   ═══════════════════════════ */
+let meshE, meshD, curNR=0, curNC=0;
+let vertExag=30;
+let storedZ=null, storedAcc=null, storedFrame=null;
+
+const dummy=new THREE.Object3D();
+const tmpCol=new THREE.Color();
+
+function initMeshes(nr,nc){
+  if(meshE){sceneE.remove(meshE);meshE.geometry.dispose();meshE.material.dispose();}
+  if(meshD){sceneD.remove(meshD);meshD.geometry.dispose();meshD.material.dispose();}
+  curNR=nr;curNC=nc;
+
+  const cs=10/Math.max(nr,nc);
+  const box=new THREE.BoxGeometry(cs*0.95,1,cs*0.95);
+  box.translate(0,0.5,0); // origin at bottom
+
+  const mkMat=()=>new THREE.MeshPhongMaterial({shininess:10});
+  meshE=new THREE.InstancedMesh(box,mkMat(),nr*nc);
+  meshD=new THREE.InstancedMesh(box.clone(),mkMat(),nr*nc);
+
+  for(let r=0;r<nr;r++) for(let c=0;c<nc;c++){
+    const i=r*nc+c;
+    dummy.position.set((c-nc/2)*cs,0,(r-nr/2)*cs);
+    dummy.scale.set(1,0.001,1);
+    dummy.updateMatrix();
+    meshE.setMatrixAt(i,dummy.matrix);
+    meshD.setMatrixAt(i,dummy.matrix);
+    tmpCol.setRGB(.9,.93,.96);
+    meshE.setColorAt(i,tmpCol);
+    meshD.setColorAt(i,tmpCol);
+  }
+  sceneE.add(meshE);
+  sceneD.add(meshD);
+}
+
+function updateMeshes(Z,acc,f){
+  if(!meshE) return;
+  const nr=f.NR, nc=f.NC, maxH=f.maxH||1;
+  const logMaxA=f.maxA>1?Math.log10(f.maxA):1;
+  const cs=10/Math.max(nr,nc);
+  const hs=cs*vertExag*0.1;
+
+  for(let i=0;i<nr*nc;i++){
+    const r=(i/nc)|0, c=i%nc;
+    const h=Z[i]*hs;
+    dummy.position.set((c-nc/2)*cs,0,(r-nr/2)*cs);
+    dummy.scale.set(1,Math.max(h,0.001),1);
+    dummy.updateMatrix();
+    meshE.setMatrixAt(i,dummy.matrix);
+    meshD.setMatrixAt(i,dummy.matrix);
+
+    const te=Z[i]/maxH;
+    const[re,ge,be]=iceRGB(te);
+    tmpCol.setRGB(re,ge,be);
+    meshE.setColorAt(i,tmpCol);
+
+    const td=Math.log10(acc[i]+1)/logMaxA;
+    const[rd,gd,bd]=iceRevRGB(td);
+    tmpCol.setRGB(rd,gd,bd);
+    meshD.setColorAt(i,tmpCol);
+  }
+  meshE.instanceMatrix.needsUpdate=true;
+  meshD.instanceMatrix.needsUpdate=true;
+  meshE.instanceColor.needsUpdate=true;
+  meshD.instanceColor.needsUpdate=true;
+  controls.target.y=maxH*hs*0.5;
+}
+
+/* ═══════════════════════════
+   Render loop
+   ═══════════════════════════ */
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  if(canvas.width!==w*devicePixelRatio||canvas.height!==h*devicePixelRatio){
+    renderer.setSize(w,h,false);
+  }
+
+  const hw=Math.floor(w/2);
+  renderer.setScissorTest(true);
+  camera.aspect=hw/h;
+  camera.updateProjectionMatrix();
+
+  renderer.setViewport(0,0,hw,h);
+  renderer.setScissor(0,0,hw,h);
+  renderer.render(sceneE,camera);
+
+  renderer.setViewport(hw,0,w-hw,h);
+  renderer.setScissor(hw,0,w-hw,h);
+  renderer.render(sceneD,camera);
+}
+animate();
+
+/* ═══════════════════════════
+   Worker ↔ UI
+   ═══════════════════════════ */
+let running=false, timer=null, delay=50;
+function scheduleStep(){
+  if(!running) return;
+  timer=setTimeout(()=>worker.postMessage({cmd:'step'}),delay);
+}
+
+worker.onmessage=function(e){
+  if(e.data.type==='frame'){
+    const f=e.data;
+    const Z=new Int32Array(f.Z), acc=new Int32Array(f.acc);
+    if(f.NR!==curNR||f.NC!==curNC) initMeshes(f.NR,f.NC);
+    storedZ=Z; storedAcc=acc; storedFrame=f;
+    updateMeshes(Z,acc,f);
+    document.getElementById('sim-info').textContent=
+      'thresh='+document.getElementById('sl-thresh').value+
+      ', give='+document.getElementById('sl-give').value+
+      ' | t='+f.step+' | Z:['+f.minH+','+f.maxH+
+      '] | wasted: '+f.totalWasted.toLocaleString();
+    if(running) scheduleStep();
+  }
+};
+
+/* ═══════════════════════════
+   Controls
+   ═══════════════════════════ */
+document.getElementById('btn-play').onclick=()=>{if(!running){running=true;scheduleStep();}};
+document.getElementById('btn-pause').onclick=()=>{running=false;clearTimeout(timer);};
+
+function fullReset(){
+  running=false;clearTimeout(timer);
+  const n=parseInt(document.getElementById('sl-size').value);
+  worker.postMessage({cmd:'init',NR:n,NC:n,
+    dropPct:parseInt(document.getElementById('sl-drops').value),
+    TH:parseInt(document.getElementById('sl-thresh').value),
+    GIVE:parseInt(document.getElementById('sl-give').value)});
+}
+document.getElementById('btn-reset').onclick=fullReset;
+
+document.getElementById('sl-thresh').oninput=function(e){
+  document.getElementById('v-thresh').textContent=e.target.value;
+  worker.postMessage({cmd:'setTH',value:parseInt(e.target.value)});
+};
+document.getElementById('sl-give').oninput=function(e){
+  document.getElementById('v-give').textContent=e.target.value;
+  worker.postMessage({cmd:'setGIVE',value:parseInt(e.target.value)});
+};
+document.getElementById('sl-drops').oninput=function(e){
+  document.getElementById('v-drops').textContent=e.target.value+'%';
+  worker.postMessage({cmd:'setDrops',value:parseInt(e.target.value)});
+};
+document.getElementById('sl-delay').oninput=function(e){
+  delay=parseInt(e.target.value);
+  document.getElementById('v-delay').textContent=delay;
+};
+document.getElementById('sl-size').oninput=function(e){
+  document.getElementById('v-size').textContent=e.target.value;
+};
+document.getElementById('sl-size').onchange=fullReset;
+document.getElementById('sl-exag').oninput=function(e){
+  vertExag=parseFloat(e.target.value);
+  document.getElementById('v-exag').textContent=vertExag;
+  if(storedZ&&storedFrame) updateMeshes(storedZ,storedAcc,storedFrame);
+};
+
+fullReset();
+</script>
+</body>
+</html>

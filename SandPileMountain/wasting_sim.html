@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Wasting Sandpile — Full Simulation</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #222;
+  background: #fff;
+  line-height: 1.55;
+  font-size: 15px;
+}
+.columns {
+  display: flex;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  gap: 32px;
+}
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  max-height: 100vh;
+  overflow-y: auto;
+  padding-top: 24px;
+}
+.sidebar h1 {
+  font-size: 20px;
+  font-weight: normal;
+  margin-bottom: 12px;
+  line-height: 1.3;
+}
+.sidebar p {
+  font-size: 14px;
+  color: #555;
+  line-height: 1.5;
+}
+.separator {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 14px 0;
+}
+.main { flex: 1; min-width: 0; }
+.section-title {
+  font-size: 17px;
+  font-weight: normal;
+  margin: 0 0 10px 0;
+  color: #222;
+}
+.rule-box {
+  background: #f8f8f8;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  font-size: 14px;
+  font-family: Georgia, serif;
+  line-height: 1.7;
+}
+.rule-box .mono {
+  font-family: monospace;
+  font-size: 13px;
+  background: #fff;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+#sim-info {
+  font-family: monospace;
+  font-size: 13px;
+  margin: 0 0 6px 0;
+  color: #444;
+}
+.viz-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 10px;
+}
+.viz-panel { flex:1; min-width:0; }
+.viz-title {
+  font-family: sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 1px;
+  color: #222;
+}
+.canvas-wrap {
+  position: relative;
+  padding-right: 30px;
+}
+.viz-canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border: 1px solid #ccc;
+  background: #000;
+  display: block;
+}
+.cbar-col {
+  position: absolute; top: 0; right: 0; width: 26px; height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+}
+.cbar-canvas { flex: 1; width: 12px; min-height: 0; border: 1px solid #ccc; image-rendering: auto; }
+.cbar-num { font-family: monospace; font-size: 10px; color: #777; }
+.cbar-label { font-family: sans-serif; font-size: 9px; color: #999; font-style: italic; writing-mode: vertical-rl; transform: rotate(180deg); margin-top: 4px; }
+#sim-controls { margin-bottom: 0.8em; }
+#sim-controls button { padding: 0.2em 0.8em; cursor: pointer; font-family: sans-serif; font-size: 13px; }
+.slider-grid {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px;
+  align-items: center; max-width: 440px; font-size: 85%; margin-top: 0.5em;
+}
+.slider-grid label { font-family: sans-serif; font-size: 13px; }
+.slider-grid span { font-family: monospace; font-size: 12px; text-align: right; min-width: 50px; }
+/* ── demo ── */
+.demo-cell {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  font-weight: normal;
+  border: 2px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.demo-cell:hover { border-color: #888; }
+.demo-cell.toppling {
+  background: #cc2222 !important;
+  color: #fff !important;
+  border-color: #991111;
+  box-shadow: 0 0 8px rgba(204,34,34,0.5);
+}
+.mode-box {
+  font-family: sans-serif; font-size: 13px;
+  margin: 0.6em 0;
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+}
+.mode-box label { cursor: pointer; display: flex; align-items: center; gap: 3px; }
+</style>
+</head>
+<body>
+
+<div class="columns">
+
+  <aside class="sidebar">
+    <h1>Wasting Sandpile</h1>
+    <p>Mass-removing topple model. When a cell's gradient exceeds the
+       critical height, it loses material that is <strong>removed from the
+       system</strong> (not transferred to neighbours).</p>
+    <hr class="separator">
+    <p>Cell loses a fixed <em>give</em> per topple event.
+       Multiple topples relax the gradient below threshold.</p>
+    <hr class="separator">
+    <p style="font-size:12px;color:#999">
+       Mass is <em>not</em> conserved &mdash; wasted material
+       leaves the system. D8 neighbours. By Brayden Noh.</p>
+  </aside>
+
+  <main class="main">
+
+    <h2 class="section-title">Toppling Rule</h2>
+    <div class="rule-box" id="rule-display">
+      For each cell <em>i</em>, find steepest D8 neighbour <em>j</em>*:<br>
+      <span class="mono">&Delta;z = z<sub>i</sub> &minus; z<sub>j*</sub></span><br><br>
+      If <span class="mono">&Delta;z &ge; threshold</span>:<br>
+      &emsp; <span class="mono">z<sub>i</sub> &larr; z<sub>i</sub> &minus; give</span> &emsp; (mass removed)<br><br>
+      Boundary cells see outside as height 0.
+    </div>
+
+    <hr class="separator">
+
+    <!-- ──────── Interactive Demo ──────── -->
+    <h2 class="section-title">Interactive Demo</h2>
+    <p style="font-size:14px;color:#555;margin-bottom:8px">
+      Click any cell to drop a block (+1). Mass is <strong>removed</strong>, not
+      transferred. Cascades animate step by step. Uses D8 (all 8 neighbours).</p>
+
+    <div style="margin:10px 0;">
+      <div id="demo-grid" style="display:grid; grid-template-columns:repeat(5,48px); grid-template-rows:repeat(5,48px); gap:5px; width:fit-content;"></div>
+      <div style="margin-top:8px; font-family:sans-serif; font-size:13px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button id="demo-reset" style="padding:0.2em 0.8em; cursor:pointer; font-size:13px;">Reset</button>
+        <span style="color:#888">|</span>
+        <label>Threshold: <input type="number" id="demo-thresh" value="4" min="1" max="50" style="width:46px; font-size:13px;"></label>
+        <label>Give: <input type="number" id="demo-give" value="2" min="1" max="50" style="width:46px; font-size:13px;"></label>
+      </div>
+      <div id="demo-status" style="font-family:monospace; font-size:12px; color:#666; margin-top:6px; min-height:1.5em;"></div>
+    </div>
+
+    <hr class="separator">
+
+    <!-- ──────── Full Simulation ──────── -->
+    <h2 class="section-title">Simulation</h2>
+    <p style="font-size:14px;color:#555;margin-bottom:8px">
+      Left: surface height. Right: D8 flow accumulation (steepest-descent routing).</p>
+
+    <div id="sim-info">thresh=4, give=2 (D8) | t=0 | Z:[0, 0] | wasted: 0</div>
+
+    <div class="viz-row">
+      <div class="viz-panel">
+        <div class="viz-title" id="z-title">Surface Z (t=0)</div>
+        <div class="canvas-wrap">
+          <canvas class="viz-canvas" id="z-canvas"></canvas>
+          <div class="cbar-col">
+            <span class="cbar-num" id="z-max">0</span>
+            <canvas class="cbar-canvas" id="z-cbar"></canvas>
+            <span class="cbar-num">0</span>
+            <span class="cbar-label">Height</span>
+          </div>
+        </div>
+      </div>
+      <div class="viz-panel">
+        <div class="viz-title" id="acc-title">Flow Accumulation (t=0)</div>
+        <div class="canvas-wrap">
+          <canvas class="viz-canvas" id="acc-canvas"></canvas>
+          <div class="cbar-col">
+            <span class="cbar-num" id="acc-max">0</span>
+            <canvas class="cbar-canvas" id="acc-cbar"></canvas>
+            <span class="cbar-num">1</span>
+            <span class="cbar-label">log10(acc)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="sim-controls">
+      <button id="btn-play">&#9654; Play</button>
+      <button id="btn-pause">&#9646;&#9646; Pause</button>
+      <button id="btn-reset">Reset</button>
+    </div>
+
+
+    <div class="slider-grid">
+      <label for="sl-thresh">Threshold (c)</label>
+      <input type="range" id="sl-thresh" min="1" max="20" step="1" value="4">
+      <span id="v-thresh">4</span>
+
+      <label for="sl-give" id="lbl-give">Give</label>
+      <input type="range" id="sl-give" min="1" max="20" step="1" value="2">
+      <span id="v-give">2</span>
+
+      <label for="sl-drops">Drop % / step</label>
+      <input type="range" id="sl-drops" min="1" max="100" step="1" value="5">
+      <span id="v-drops">5%</span>
+
+      <label for="sl-delay">Frame delay</label>
+      <input type="range" id="sl-delay" min="0" max="500" step="10" value="50">
+      <span id="v-delay">50 ms</span>
+
+      <label for="sl-size">Grid size</label>
+      <input type="range" id="sl-size" min="50" max="400" step="50" value="100">
+      <span id="v-size">100</span>
+    </div>
+
+  </main>
+</div>
+
+<script>
+/* ══════════════════════════════════════
+   Section: Interactive 5x5 Demo
+   ══════════════════════════════════════ */
+(function() {
+  const NR = 5, NC = 5;
+  const Z = Array.from({length: NR}, () => Array(NC).fill(0));
+  const grid = document.getElementById('demo-grid');
+  const status = document.getElementById('demo-status');
+  let busy = false;
+
+  function getTH()   { return parseInt(document.getElementById('demo-thresh').value) || 4; }
+  function getGIVE() { return parseInt(document.getElementById('demo-give').value) || 2; }
+
+  const cells = [];
+  for (let r = 0; r < NR; r++) {
+    cells[r] = [];
+    for (let j = 0; j < NC; j++) {
+      const el = document.createElement('div');
+      el.className = 'demo-cell';
+      el.textContent = '0';
+      el.addEventListener('click', () => demoDrop(r, j));
+      grid.appendChild(el);
+      cells[r][j] = el;
+    }
+  }
+
+  function render() {
+    for (let r = 0; r < NR; r++)
+      for (let j = 0; j < NC; j++) {
+        const v = Z[r][j];
+        cells[r][j].textContent = v;
+        cells[r][j].classList.remove('toppling');
+        if (v === 0) {
+          cells[r][j].style.background = '#fff';
+          cells[r][j].style.color = '#222';
+          cells[r][j].style.borderColor = '#ccc';
+        } else {
+          const t = Math.min(v / 10, 1);
+          const bl = Math.max(80, 220 - t * 140);
+          cells[r][j].style.background = 'rgb(' + (30 + t*20|0) + ',' + (60 + t*20|0) + ',' + (bl + t*35|0) + ')';
+          cells[r][j].style.color = '#fff';
+          cells[r][j].style.borderColor = 'rgb(' + (20 + t*15|0) + ',' + (40 + t*15|0) + ',' + (bl - 30|0) + ')';
+        }
+      }
+  }
+
+  function findTopple() {
+    const TH = getTH();
+    // collect ALL topple-able cells, pick one at random
+    const candidates = [];
+    for (let r = 0; r < NR; r++)
+      for (let j = 0; j < NC; j++) {
+        let dzMax = 0, br = -1, bj = -1, nTies = 0, drain = false;
+        for (let dr = -1; dr <= 1; dr++)
+          for (let dj = -1; dj <= 1; dj++) {
+            if (dr === 0 && dj === 0) continue;
+            const nr2 = r + dr, nj2 = j + dj;
+            if (nr2 < 0 || nr2 >= NR || nj2 < 0 || nj2 >= NC) continue;
+            const dz = Z[r][j] - Z[nr2][nj2];
+            if (dz > dzMax) { dzMax = dz; br = nr2; bj = nj2; drain = false; nTies = 1; }
+            else if (dz === dzMax && dz > 0) { nTies++; if (Math.random()*nTies < 1) { br = nr2; bj = nj2; drain = false; } }
+          }
+        if (r === 0 || r === NR-1 || j === 0 || j === NC-1) {
+          const dzB = Z[r][j];
+          if (dzB > dzMax) { dzMax = dzB; br = -1; bj = -1; drain = true; nTies = 1; }
+          else if (dzB === dzMax && dzB > 0) { nTies++; if (Math.random()*nTies < 1) { br = -1; bj = -1; drain = true; } }
+        }
+        if (dzMax >= TH)
+          candidates.push({ r, j, br, bj, dz: dzMax, drain });
+      }
+    if (candidates.length === 0) return null;
+    return candidates[(Math.random() * candidates.length) | 0];
+  }
+
+  function animateTopple() {
+    const t = findTopple();
+    if (!t) { busy = false; status.textContent = 'Stable.'; return; }
+
+    cells[t.r][t.j].classList.add('toppling');
+
+    const actual = Math.min(getGIVE(), Z[t.r][t.j]);
+    status.textContent = 'Waste: (' + t.r + ',' + t.j + ') z=' + Z[t.r][t.j] +
+      ' loses ' + actual + '  \u0394z=' + t.dz;
+
+    setTimeout(() => {
+      Z[t.r][t.j] -= actual;
+      render();
+      setTimeout(animateTopple, 300);
+    }, 350);
+  }
+
+  function demoDrop(r, j) {
+    if (busy) return;
+    Z[r][j]++;
+    render();
+    status.textContent = 'Dropped block at (' + r + ',' + j + ')';
+    busy = true;
+    setTimeout(animateTopple, 250);
+  }
+
+  document.getElementById('demo-reset').addEventListener('click', () => {
+    if (busy) return;
+    for (let r = 0; r < NR; r++) Z[r].fill(0);
+    render();
+    status.textContent = 'Reset.';
+  });
+
+  render();
+})();
+
+/* ══════════════════════════════════════
+   Section: Full Simulation (Web Worker)
+   ══════════════════════════════════════ */
+const workerSrc = `
+'use strict';
+var NR, NC, TH = 4, GIVE = 2, dropPct = 5;
+var Z, cum, step = 0;
+var totalWasted = 0;
+
+var NB8 = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+var scanOrder;
+
+function shuffle(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = (Math.random() * (i + 1)) | 0;
+    var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+}
+
+function init(nr, nc) {
+  NR = nr; NC = nc;
+  Z   = new Int32Array(NR * NC);
+  cum = new Int32Array(NR * NC);
+  scanOrder = new Array(NR * NC);
+  for (var i = 0; i < NR * NC; i++) scanOrder[i] = i;
+  step = 0;
+  totalWasted = 0;
+}
+
+function drop() {
+  var thresh = dropPct / 100;
+  for (var i = 0; i < NR * NC; i++) {
+    if (Math.random() < thresh) Z[i]++;
+  }
+}
+
+function topple() {
+  var changed = true, passes = 0;
+  while (changed) {
+    changed = false; passes++;
+    shuffle(scanOrder);
+    for (var si = 0; si < NR * NC; si++) {
+      var idx = scanOrder[si];
+      var r = (idx / NC) | 0;
+      var j = idx % NC;
+      {
+        var dzMax = 0, bestIdx = idx, nTies = 0;
+        for (var k = 0; k < 8; k++) {
+          var nr2 = r + NB8[k][0], nj2 = j + NB8[k][1];
+          if (nr2 < 0 || nr2 >= NR || nj2 < 0 || nj2 >= NC) continue;
+          var nIdx = nr2 * NC + nj2;
+          var dz = Z[idx] - Z[nIdx];
+          if (dz > dzMax) {
+            dzMax = dz; bestIdx = nIdx; nTies = 1;
+          } else if (dz === dzMax && dz > 0) {
+            nTies++;
+            if (Math.random() * nTies < 1) bestIdx = nIdx;
+          }
+        }
+        // boundary as virtual neighbour at height 0
+        if (r === 0 || r === NR-1 || j === 0 || j === NC-1) {
+          var dzB = Z[idx];
+          if (dzB > dzMax) { dzMax = dzB; bestIdx = -1; nTies = 1; }
+          else if (dzB === dzMax && dzB > 0) { nTies++; if (Math.random()*nTies < 1) bestIdx = -1; }
+        }
+        if (dzMax >= TH) {
+          var removal = GIVE;
+          if (removal > Z[idx]) removal = Z[idx];
+          Z[idx] -= removal;
+          totalWasted += removal;
+          cum[idx] += removal;
+          changed = true;
+        }
+      }}
+    if (passes > 400) break;
+  }
+}
+
+function flowAcc() {
+  var n = NR * NC;
+  var recv = new Int32Array(n);
+  for (var r = 0; r < NR; r++) {
+    for (var j = 0; j < NC; j++) {
+      var i = r * NC + j;
+      recv[i] = i;
+      var dzMax = 0;
+      for (var k = 0; k < 8; k++) {
+        var nr2 = r + NB8[k][0], nj2 = j + NB8[k][1];
+        if (nr2 < 0 || nr2 >= NR || nj2 < 0 || nj2 >= NC) continue;
+        var nIdx = nr2 * NC + nj2;
+        var dz = Z[i] - Z[nIdx];
+        if (dz > dzMax) { dzMax = dz; recv[i] = nIdx; }
+      }
+    }
+  }
+  var order = new Array(n);
+  for (var i = 0; i < n; i++) order[i] = i;
+  order.sort(function(a, b) { return Z[b] - Z[a]; });
+  var acc = new Int32Array(n);
+  for (var i = 0; i < n; i++) acc[i] = 1;
+  for (var k2 = 0; k2 < n; k2++) {
+    var i = order[k2];
+    var rc = recv[i];
+    if (rc !== i) acc[rc] += acc[i];
+  }
+  return acc;
+}
+
+function snap() {
+  var minH = 1e9, maxH = 0;
+  for (var i = 0; i < NR*NC; i++) {
+    if (Z[i] < minH) minH = Z[i];
+    if (Z[i] > maxH) maxH = Z[i];
+  }
+  if (NR*NC === 0) minH = 0;
+  var acc = flowAcc();
+  var maxA = 0;
+  for (var i = 0; i < NR*NC; i++) if (acc[i] > maxA) maxA = acc[i];
+  self.postMessage({
+    type:'frame',
+    Z:   new Int32Array(Z).buffer,
+    acc: acc.buffer,
+    step:step, minH:minH, maxH:maxH,
+    maxA:maxA, totalWasted:totalWasted, NR:NR, NC:NC
+  }, [new Int32Array(Z).buffer, acc.buffer]);
+}
+
+self.onmessage = function(e) {
+  var d = e.data;
+  if (d.cmd === 'init') {
+    init(d.NR, d.NC);
+    if (d.dropPct !== undefined) dropPct = d.dropPct;
+    if (d.TH !== undefined) TH = d.TH;
+    if (d.GIVE !== undefined) GIVE = d.GIVE;
+    snap();
+  }
+  if (d.cmd === 'step') {
+    step++;
+    drop();
+    topple();
+    snap();
+  }
+  if (d.cmd === 'reset') {
+    Z.fill(0); cum.fill(0); step = 0; totalWasted = 0;
+    snap();
+  }
+  if (d.cmd === 'setDrops') dropPct = d.value;
+  if (d.cmd === 'setTH')    TH = d.value;
+  if (d.cmd === 'setGIVE')  GIVE = d.value;
+};
+`;
+const worker = new Worker(
+  URL.createObjectURL(new Blob([workerSrc], {type:'text/javascript'}))
+);
+
+/* ── Colormaps ── */
+function lerpC(stops, t) {
+  t = Math.max(0, Math.min(1, t));
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t <= stops[i+1][0]) {
+      const f = (t - stops[i][0]) / (stops[i+1][0] - stops[i][0]);
+      return [
+        stops[i][1] + (stops[i+1][1] - stops[i][1]) * f,
+        stops[i][2] + (stops[i+1][2] - stops[i][2]) * f,
+        stops[i][3] + (stops[i+1][3] - stops[i][3]) * f
+      ];
+    }
+  }
+  const l = stops[stops.length-1];
+  return [l[1], l[2], l[3]];
+}
+const ICE_STOPS = [
+  [0.00, 0.02, 0.07, 0.15],
+  [0.15, 0.06, 0.17, 0.35],
+  [0.30, 0.10, 0.30, 0.55],
+  [0.45, 0.20, 0.47, 0.72],
+  [0.60, 0.40, 0.65, 0.82],
+  [0.75, 0.65, 0.82, 0.91],
+  [0.90, 0.85, 0.93, 0.97],
+  [1.00, 0.97, 0.98, 1.00]
+];
+function terrainRGB(t) { return lerpC(ICE_STOPS, t); }
+const ICE_REV_STOPS = [
+  [0.00, 0.97, 0.98, 1.00],
+  [0.10, 0.85, 0.93, 0.97],
+  [0.25, 0.65, 0.82, 0.91],
+  [0.40, 0.40, 0.65, 0.82],
+  [0.55, 0.20, 0.47, 0.72],
+  [0.70, 0.10, 0.30, 0.55],
+  [0.85, 0.06, 0.17, 0.35],
+  [1.00, 0.02, 0.07, 0.15]
+];
+function bluesRGB(t) { return lerpC(ICE_REV_STOPS, t); }
+
+/* ── Canvas refs ── */
+const zCv  = document.getElementById('z-canvas');
+const accCv = document.getElementById('acc-canvas');
+const zCtx  = zCv.getContext('2d');
+const accCtx = accCv.getContext('2d');
+
+function drawCbar(id, fn) {
+  const c = document.getElementById(id);
+  const h = 256; c.width = 1; c.height = h;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(1, h);
+  for (let i = 0; i < h; i++) {
+    const t = 1 - i / (h - 1);
+    const [r, g, b] = fn(t);
+    img.data[i*4]=r*255|0; img.data[i*4+1]=g*255|0; img.data[i*4+2]=b*255|0; img.data[i*4+3]=255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+drawCbar('z-cbar', terrainRGB);
+drawCbar('acc-cbar', bluesRGB);
+
+function syncCbarHeights() {
+  document.querySelectorAll('.canvas-wrap').forEach(function(wrap) {
+    const cv = wrap.querySelector('.viz-canvas');
+    const cb = wrap.querySelector('.cbar-col');
+    if (cv && cb) cb.style.height = cv.offsetHeight + 'px';
+  });
+}
+window.addEventListener('resize', syncCbarHeights);
+requestAnimationFrame(function(){ requestAnimationFrame(syncCbarHeights); });
+
+/* ── Render ── */
+function renderFrame(d) {
+  const Z   = new Int32Array(d.Z);
+  const acc = new Int32Array(d.acc);
+  const nr = d.NR, nc = d.NC;
+  const invH = d.maxH > 0 ? 1/d.maxH : 1;
+  const logMaxA = d.maxA > 1 ? Math.log10(d.maxA) : 1;
+
+  if (zCv.width!==nc||zCv.height!==nr) {
+    zCv.width=nc;zCv.height=nr;accCv.width=nc;accCv.height=nr;
+  }
+
+  const zImg=zCtx.createImageData(nc,nr),zD=zImg.data;
+  for (let i=0,p=0;i<nr*nc;i++,p+=4){const[r,g,b]=terrainRGB(Z[i]*invH);zD[p]=r*255|0;zD[p+1]=g*255|0;zD[p+2]=b*255|0;zD[p+3]=255;}
+
+  const aImg=accCtx.createImageData(nc,nr),aD=aImg.data;
+  for (let i=0,p=0;i<nr*nc;i++,p+=4){const t=Math.log10(acc[i]+1)/logMaxA;const[r,g,b]=bluesRGB(t);aD[p]=r*255|0;aD[p+1]=g*255|0;aD[p+2]=b*255|0;aD[p+3]=255;}
+
+  zCtx.putImageData(zImg,0,0);
+  accCtx.putImageData(aImg,0,0);
+
+  document.getElementById('z-title').textContent='Surface Z  (t='+d.step+')';
+  document.getElementById('acc-title').textContent='Flow Accumulation  (t='+d.step+')';
+  document.getElementById('z-max').textContent=d.maxH;
+  document.getElementById('acc-max').textContent=d.maxA;
+
+  const thVal = document.getElementById('sl-thresh').value;
+  const giveVal = document.getElementById('sl-give').value;
+  document.getElementById('sim-info').textContent =
+    'thresh='+thVal+', give='+giveVal+' (D8)  |  t='+d.step+
+    '  |  Z: ['+d.minH+', '+d.maxH+']'+
+    '  |  wasted: '+d.totalWasted.toLocaleString();
+}
+
+/* ── Step scheduling ── */
+let running = false, timer = null, delay = 50;
+function scheduleStep() {
+  if (!running) return;
+  timer = setTimeout(function() { worker.postMessage({cmd:'step'}); }, delay);
+}
+worker.onmessage = function(e) {
+  if (e.data.type === 'frame') {
+    renderFrame(e.data); syncCbarHeights();
+    if (running) scheduleStep();
+  }
+};
+
+/* ── UI wiring ── */
+document.getElementById('btn-play').addEventListener('click', function() { if(!running){running=true;scheduleStep();} });
+document.getElementById('btn-pause').addEventListener('click', function() { running=false;clearTimeout(timer); });
+
+function getGridSize() { return parseInt(document.getElementById('sl-size').value); }
+
+function fullReset() {
+  running=false; clearTimeout(timer);
+  const n = getGridSize();
+  worker.postMessage({
+    cmd:'init', NR:n, NC:n,
+    dropPct: parseInt(document.getElementById('sl-drops').value),
+    TH: parseInt(document.getElementById('sl-thresh').value),
+    GIVE: parseInt(document.getElementById('sl-give').value),
+  });
+}
+
+document.getElementById('btn-reset').addEventListener('click', fullReset);
+
+// sliders
+document.getElementById('sl-drops').addEventListener('input', function(e) {
+  const v=parseInt(e.target.value); document.getElementById('v-drops').textContent=v+'%';
+  worker.postMessage({cmd:'setDrops',value:v});
+});
+document.getElementById('sl-delay').addEventListener('input', function(e) {
+  delay=parseInt(e.target.value); document.getElementById('v-delay').textContent=delay+' ms';
+});
+document.getElementById('sl-thresh').addEventListener('input', function(e) {
+  const v=parseInt(e.target.value); document.getElementById('v-thresh').textContent=v;
+  worker.postMessage({cmd:'setTH',value:v});
+});
+document.getElementById('sl-give').addEventListener('input', function(e) {
+  const v=parseInt(e.target.value); document.getElementById('v-give').textContent=v;
+  worker.postMessage({cmd:'setGIVE',value:v});
+});
+document.getElementById('sl-size').addEventListener('input', function(e) {
+  document.getElementById('v-size').textContent=e.target.value;
+});
+document.getElementById('sl-size').addEventListener('change', fullReset);
+
+
+/* ── Init ── */
+fullReset();
+</script>
+</body>
+</html>
