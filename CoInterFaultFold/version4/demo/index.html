@@ -38,8 +38,8 @@ canvas{display:block;margin:0 auto;background:#fff}
 <div id="info"></div>
 <div class="slider-grid">
   <label>Locking depth</label>
-  <input type="range" id="sl-lock" min="5" max="80" step="1" value="50">
-  <span class="val" id="v-lock">50 km</span>
+  <input type="range" id="sl-lock" min="0" max="80" step="1" value="0">
+  <span class="val" id="v-lock">0 km</span>
   <label>\(\alpha\)</label>
   <input type="range" id="sl-alpha" min="0" max="1" step="0.01" value="1">
   <span class="val" id="v-alpha">1.00</span>
@@ -336,7 +336,7 @@ function draw(){
             for(var py=Math.floor(pyTop);py<pyBot;py+=2){
                 var depth=((py-pyTop)/(pyBot-pyTop))*geoDepthMax;
                 var wVal=wF(depth,wo);
-                var fadeAlpha=(1-wVal)*0.92;
+                var fadeAlpha=1-wVal;
                 if(fadeAlpha>0.01){
                     geoCtx.fillStyle='rgba(255,255,255,'+fadeAlpha.toFixed(3)+')';
                     geoCtx.fillRect(GP.l,py,PW-GP.l-GP.r,2);
@@ -386,6 +386,12 @@ function init(){
     ['sl-lock','sl-alpha','sl-wt','sl-wsc'].forEach(function(id){document.getElementById(id).addEventListener('input',update);});
     document.getElementById('sel-geo').addEventListener('change',onGeoChange);
     update();
+    setInterval(function(){
+        var sl=document.getElementById('sl-lock');
+        var v=(+sl.value+1)%81;
+        sl.value=v;
+        update();
+    },1000);
 }
 window.addEventListener('DOMContentLoaded',init);
 </script>
