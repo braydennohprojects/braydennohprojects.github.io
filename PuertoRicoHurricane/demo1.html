@@ -508,7 +508,7 @@ function drawRatio(){
       if(nu<MIN_COUNT||nd<MIN_COUNT) continue;
       const r=nu/nd;
       const D=D_CENTERS[i];
-      if(D<0.04||D>1.5||r<=0) continue;
+      if(D<0.04||D>1.5||r<=0||r>1) continue;
       const py2=my(r);
       if(py2<mt-5||py2>mt+ph+5) continue;
 
