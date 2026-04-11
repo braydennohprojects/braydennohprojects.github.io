@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Boulder Transport — Ratio Invariance</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Georgia,'Times New Roman',serif;color:#222;background:#fff;line-height:1.55;font-size:15px;}
+.columns{display:flex;max-width:1200px;margin:0 auto;padding:20px 24px;gap:28px;}
+.sidebar{width:240px;flex-shrink:0;position:sticky;top:0;align-self:flex-start;max-height:100vh;overflow-y:auto;padding-top:20px;}
+.sidebar h1{font-size:19px;font-weight:normal;margin-bottom:10px;line-height:1.3;}
+.sidebar p{font-size:13.5px;color:#555;line-height:1.5;margin-bottom:8px;}
+.separator{border:none;border-top:1px solid #ddd;margin:12px 0;}
+.main{flex:1;min-width:0;}
+.rule-box{background:#f8f8f8;border:1px solid #eee;border-radius:4px;padding:10px 14px;margin:8px 0;font-size:13px;line-height:1.7;}
+.rule-box .m{font-family:monospace;font-size:12px;background:#fff;padding:1px 3px;border-radius:2px;}
+#sim-info{font-family:monospace;font-size:12px;color:#444;margin-bottom:6px;min-height:1.4em;}
+.top-row{display:flex;gap:12px;margin-bottom:8px;}
+.top-panel{flex:1;min-width:0;}
+.top-panel canvas{display:block;width:100%;height:220px;}
+.bot-row{display:flex;gap:0;margin-bottom:8px;align-items:stretch;}
+.gauge-wrap{width:46px;flex-shrink:0;position:relative;}
+.gauge-wrap canvas{display:block;}
+.bed-wrap{flex:1;min-width:0;}
+.bed-wrap canvas{display:block;width:100%;height:200px;}
+#controls{margin-top:8px;}
+#controls button{padding:3px 12px;cursor:pointer;font-family:sans-serif;font-size:12px;margin-right:4px;}
+.mode-box{font-family:sans-serif;font-size:12px;margin:6px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+.mode-box label{cursor:pointer;display:flex;align-items:center;gap:3px;}
+.slider-grid{display:grid;grid-template-columns:auto 1fr auto;gap:3px 8px;align-items:center;max-width:400px;margin-top:6px;}
+.slider-grid label{font-family:sans-serif;font-size:12px;}
+.slider-grid span{font-family:monospace;font-size:11px;text-align:right;min-width:45px;}
+.slider-grid input[type="range"]{width:100%;}
+</style>
+</head>
+<body>
+<div class="columns">
+<aside class="sidebar">
+  <h1>Boulder Transport</h1>
+  <p>The ratio of boulder counts between two reaches is set entirely
+     by the flood statistics and bed slopes &mdash; the transport law cancels.</p>
+  <hr class="separator">
+  <div class="rule-box">
+    <span class="m">n<sub>up</sub>(D) / n<sub>dn</sub>(D) = &phi;<sub>dn</sub>(D) / &phi;<sub>up</sub>(D)</span>
+  </div>
+  <hr class="separator">
+  <p>Bed slope: 10% &rarr; 1%.<br>
+     <span style="color:#2166ac">&marker;</span> Upstream: 10%&ndash;9%<br>
+     <span style="color:#e6550d">&marker;</span> Downstream: 2%&ndash;1%</p>
+  <hr class="separator">
+  <p style="font-size:11px;color:#999;">Brayden Noh, 2026.</p>
+</aside>
+
+<main class="main">
+
+  <h2 style="font-size:16px;font-weight:normal;margin-bottom:6px;">1. When does a boulder move?</h2>
+  <p style="font-size:13.5px;color:#444;margin-bottom:6px;">
+    A boulder of diameter <em>D</em> is entrained when the flow depth
+    exceeds the Shields threshold,
+    <span class="m">h<sub>c</sub> = &Theta;<sub>c</sub>(&rho;<sub>s</sub>&minus;&rho;)D / (&rho; S)</span>,
+    which increases linearly with grain size and inversely with bed slope.
+    A hiding function
+    (<span class="m">h<sub>c</sub> &prop; D<sup>&beta;</sup></span>,
+    adjustable via the &beta; slider)
+    can weaken this size dependence,
+    but for grains much larger than the bed median the effect is small.
+  </p>
+
+  <h2 style="font-size:16px;font-weight:normal;margin-bottom:6px;">2. Why individual boulders don't work</h2>
+  <p style="font-size:13.5px;color:#444;margin-bottom:6px;">
+    We don't know when each boulder entered the channel or how many floods moved it.
+    A boulder far downstream could have arrived millennia ago or last year.
+    Individual transport histories can't be reconstructed.
+  </p>
+
+  <h2 style="font-size:16px;font-weight:normal;margin-bottom:6px;">3. The ratio test</h2>
+  <p style="font-size:13.5px;color:#444;margin-bottom:4px;">
+    Instead, count boulders of each size in two reaches and take the ratio.
+    Boulders accumulate where they're hard to move, so:
+  </p>
+  <div class="rule-box" style="max-width:520px;">
+    <span class="m" style="font-size:13px;">n<sub>up</sub>(D) / n<sub>dn</sub>(D) = &phi;<sub>dn</sub>(D) / &phi;<sub>up</sub>(D)</span>
+    &emsp;<span style="font-size:12px;color:#666;">&phi; = fraction of floods exceeding the threshold</span>
+  </div>
+  <p style="font-size:13.5px;color:#444;margin-bottom:6px;">
+    What cancels: <strong>(1)</strong> hop distance (same <em>D</em> at both reaches),
+    <strong>(2)</strong> flood rate (same hydrograph),
+    <strong>(3)</strong> source production (same flux).
+    Only the bed slopes and flood distribution matter.
+  </p>
+
+  <h2 style="font-size:16px;font-weight:normal;margin-bottom:6px;">4. Try it</h2>
+  <p style="font-size:13.5px;color:#444;margin-bottom:4px;">
+    Press <strong>Start</strong>. The &alpha; slider controls flood extremity
+    (low = fat tail, high = thin tail).
+    <strong>Test invariance:</strong> switch transport laws mid-run &mdash; the dots stay on the same curve.
+    <strong>Test regime change:</strong> start at &alpha;&thinsp;=&thinsp;1.5,
+    let it settle, drag to 4.0 &mdash; small boulders adjust, large ones lag behind.
+  </p>
+
+  <hr class="separator">
+
+  <div id="sim-info">Ready. Press Start.</div>
+
+  <div class="top-row">
+    <div class="top-panel">
+      <canvas id="transport-cv"></canvas>
+    </div>
+    <div class="top-panel">
+      <canvas id="dist-cv"></canvas>
+    </div>
+    <div class="top-panel">
+      <canvas id="ratio-cv"></canvas>
+    </div>
+  </div>
+
+  <div class="bot-row">
+    <div class="gauge-wrap" id="gauge-wrap">
+      <canvas id="gauge-cv" width="46" height="200"></canvas>
+    </div>
+    <div class="bed-wrap">
+      <canvas id="bed-cv"></canvas>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="btn-start">&#9654; Start</button>
+    <button id="btn-pause">&#9646;&#9646; Pause</button>
+    <button id="btn-reset">Reset</button>
+  </div>
+
+  <div class="mode-box">
+    <strong style="font-size:11px;color:#888;">Transport:</strong>
+    <label><input type="radio" name="law" value="inverse" checked> 1/<em>D</em></label>
+    <label><input type="radio" name="law" value="church"> Church &amp; Hassan</label>
+    <label><input type="radio" name="law" value="linear"> 2 &minus; &frac12;D*</label>
+    <label><input type="radio" name="law" value="constant"> Constant</label>
+  </div>
+  <div class="slider-grid">
+    <label>Pareto &alpha;</label>
+    <input type="range" id="sl-alpha" min="1.0" max="5.0" step="0.1" value="1.5">
+    <span id="v-alpha">1.5</span>
+
+    <label>Hiding &beta;</label>
+    <input type="range" id="sl-beta" min="0.0" max="1.0" step="0.05" value="1.0">
+    <span id="v-beta">1.00</span>
+
+    <label>Speed</label>
+    <input type="range" id="sl-speed" min="1" max="80" step="1" value="10">
+    <span id="v-speed">10</span>
+  </div>
+
+  <hr class="separator">
+
+  <h2 style="font-size:16px;font-weight:normal;margin-bottom:6px;">5. Dating the regime change</h2>
+  <p style="font-size:13.5px;color:#444;margin-bottom:4px;">
+    After a regime shift, small boulders equilibrate fast (they move often)
+    but large boulders lag (they rarely move).
+    The crossover diameter <em>D</em>* where dots start deviating from the curve
+    tells you when the change happened:
+  </p>
+  <p style="font-size:13px;color:#555;margin-bottom:2px;padding-left:12px;">
+    <strong>a.</strong> Find <em>D</em>* from the ratio plot (where dots leave the curve).<br>
+    <strong>b.</strong> Compute &phi;(<em>D</em>*) from the gauge record.<br>
+    <strong>c.</strong> Time since change:
+    <span class="m">t<sub>c</sub> &asymp; 1 / (&lambda; &middot; &phi;(D*))</span>.<br>
+    <strong>d.</strong> Example: <em>D</em>*&thinsp;=&thinsp;0.8&thinsp;m,
+    &phi;&thinsp;=&thinsp;10<sup>&minus;3</sup>
+    &rarr; &tau;&thinsp;&asymp;&thinsp;1000 floods (centuries to millennia).
+  </p>
+  <p style="font-size:13px;color:#555;margin-bottom:6px;margin-top:4px;">
+    This gives the right order of magnitude, not a precise year.
+    But it easily separates &ldquo;last century&rdquo; from &ldquo;early Holocene.&rdquo;
+    <strong>Limitation:</strong> the method only detects transitions toward calmer conditions.
+    The reverse (calm &rarr; extreme) erases itself &mdash;
+    the new extreme floods flush the old signal.
+  </p>
+</main>
+</div>
+
+<script>
+'use strict';
+
+/* ═══════════════ PHYSICS ═══════════════ */
+const TC=0.045, RS=2650, RH=1000, DR=RS-RH;
+const S_UP=0.10, S_DN=0.01, LCHAN=1000;
+const D50=0.3;
+
+// Window boundaries (by slope)
+const X_UP0=0, X_UP1=LCHAN*(S_UP-0.09)/(S_UP-S_DN);          // S=10%→9%
+const X_DN0=LCHAN*(S_UP-0.02)/(S_UP-S_DN), X_DN1=LCHAN;      // S=2%→1%
+const X_UP_MID=(X_UP0+X_UP1)/2, X_DN_MID=(X_DN0+X_DN1)/2;
+
+function slopeAt(x){return S_UP-(S_UP-S_DN)*Math.max(0,Math.min(x,LCHAN))/LCHAN;}
+// Hiding function: hc ∝ D^β.  β=1: fully size-selective (no hiding). β→0: equal mobility.
+// τ*ci/τ*c50 = (D/D50)^β  →  hc(D) = hc_base * (D/D50)^β / (D/D50) = hc_base * (D/D50)^(β-1) * D50...
+// Simpler: hc = TC*DR*D50/(RH*S) * (D/D50)^β
+function getBeta(){return parseFloat(document.getElementById('sl-beta').value);}
+function hCrit(D,x){
+  const beta=getBeta();
+  return TC*DR*D50/(RH*slopeAt(x)) * Math.pow(D/D50, beta);
+}
+function bedZ(x){return 0.5*(S_UP+S_DN)*LCHAN - S_UP*x + 0.5*(S_UP-S_DN)*x*x/LCHAN;}
+const Z_MAX=bedZ(0);
+
+/* ═══════════════ FLOOD MODEL: Pareto ═══════════════ */
+const H_MIN=0.3;
+
+function phiA(D,x,alpha){
+  const hc=hCrit(D,x);
+  return hc<=H_MIN?1:Math.pow(H_MIN/hc,alpha);
+}
+
+function drawPareto(a){return Math.min(H_MIN*Math.pow(Math.random(),-1/a), H_GAUGE_MAX);}
+
+function expRand(m){return -m*Math.log(Math.random());}
+
+/* ═══════════════ SIZE BINS ═══════════════ */
+const NBINS=12;
+const D_EDGES=[];
+const logDmin=Math.log10(0.04), logDmax=Math.log10(1.5);
+for(let i=0;i<=NBINS;i++) D_EDGES.push(Math.pow(10,logDmin+(logDmax-logDmin)*i/NBINS));
+const D_CENTERS=[];
+for(let i=0;i<NBINS;i++) D_CENTERS.push(Math.sqrt(D_EDGES[i]*D_EDGES[i+1]));
+
+function sizeBin(D){
+  for(let i=0;i<NBINS;i++) if(D>=D_EDGES[i]&&D<D_EDGES[i+1]) return i;
+  return -1;
+}
+
+/* ═══════════════ STATE ═══════════════ */
+let boulders=[]; // {x,D,mobile}
+let sumUp=new Float64Array(NBINS);
+let sumDn=new Float64Array(NBINS);
+let nFlood=0, nSamples=0;
+let currentH=0;
+let running=false;
+const SPINUP=300;
+const H_GAUGE_MAX=10;
+// D_MAX: largest boulder that h=10m can move at the gentlest slope (1%)
+const D_MAX_PHYS=H_GAUGE_MAX*RH*S_DN/(TC*DR); // ~1.35 m
+const N_SRC=5, SRC_GAM=2.0, D_MIN=0.05, D_MAX=D_MAX_PHYS, MAX_POP=4000;
+let prevAlpha=2.5, prevLaw='inverse';
+let nextId=0;
+
+function getAlpha(){return parseFloat(document.getElementById('sl-alpha').value);}
+function getSpeed(){return parseInt(document.getElementById('sl-speed').value);}
+function getLaw(){return document.querySelector('input[name="law"]:checked').value;}
+
+/* ═══════════════ TRANSPORT ═══════════════ */
+function hop(D){
+  const ds=D/D50, law=getLaw();
+  if(law==='constant') return expRand(8);
+  if(law==='inverse')  return expRand(3/Math.max(ds,0.1));
+  if(law==='linear')   return expRand(6*Math.max(2-0.5*ds,0.05));
+  // church & hassan
+  const a=Math.max(1-Math.log10(Math.max(ds,0.01)),0.001);
+  return expRand(10*Math.pow(a,1.35));
+}
+
+/* ═══════════════ SIM STEP ═══════════════ */
+function simStep(h){
+  nFlood++;
+  currentH=h;
+
+  for(let b of boulders){
+    const hc=hCrit(b.D,b.x);
+    b.mobile=(h>hc);
+    if(b.mobile) b.x+=hop(b.D);
+  }
+  // Remove exited boulders in-place (no array allocation)
+  let w=0;
+  for(let j=0;j<boulders.length;j++){
+    if(boulders[j].x>=0&&boulders[j].x<LCHAN) boulders[w++]=boulders[j];
+  }
+  boulders.length=w;
+
+  // Source
+  for(let i=0;i<N_SRC;i++){
+    const D=D_MIN*Math.pow(Math.random(),-1/SRC_GAM);
+    boulders.push({id:nextId++, x:Math.random()*5, D:Math.min(D,D_MAX), mobile:false});
+  }
+  if(boulders.length>MAX_POP){
+    const keep=[];
+    for(let i=0;i<MAX_POP*0.7;i++) keep.push(boulders[(Math.random()*boulders.length)|0]);
+    boulders=keep;
+  }
+
+  // Accumulate with exponential decay (rolling window)
+  if(nFlood>SPINUP && nFlood%3===0){
+    for(let i=0;i<NBINS;i++){sumUp[i]*=0.998; sumDn[i]*=0.998;}
+    nSamples++;
+    for(let b of boulders){
+      const bin=sizeBin(b.D);
+      if(bin<0) continue;
+      if(b.x>=X_UP0&&b.x<X_UP1) sumUp[bin]++;
+      if(b.x>=X_DN0&&b.x<X_DN1) sumDn[bin]++;
+    }
+  }
+}
+
+function resetSim(){
+  boulders=[]; sumUp.fill(0); sumDn.fill(0);
+  nFlood=0; nSamples=0; currentH=0; running=false;
+  for(let i=0;i<SPINUP;i++) simStep(drawPareto(getAlpha()));
+  sumUp.fill(0); sumDn.fill(0); nSamples=0;
+  for(let b of boulders) b.mobile=false;
+  currentH=0;
+}
+
+/* ═══════════════ RENDERING ═══════════════ */
+const bedCv=document.getElementById('bed-cv');
+const ratioCv=document.getElementById('ratio-cv');
+const gaugeCv=document.getElementById('gauge-cv');
+const distCv=document.getElementById('dist-cv');
+const transCv=document.getElementById('transport-cv');
+let bedCtx, ratioCtx, gaugeCtx, distCtx, transCtx;
+
+function initCanvas(){
+  const dpr=window.devicePixelRatio||1;
+  // Bed + gauge: 200px tall
+  const bw=bedCv.parentElement.clientWidth, bh=200;
+  bedCv.width=bw*dpr; bedCv.height=bh*dpr;
+  bedCv.style.width=bw+'px'; bedCv.style.height=bh+'px';
+  gaugeCv.width=46*dpr; gaugeCv.height=bh*dpr;
+  gaugeCv.style.width='46px'; gaugeCv.style.height=bh+'px';
+  // Top panels: 220px tall
+  const th=220;
+  for(const cv of [ratioCv, distCv, transCv]){
+    const w=cv.parentElement.clientWidth;
+    cv.width=w*dpr; cv.height=th*dpr;
+    cv.style.width=w+'px'; cv.style.height=th+'px';
+  }
+  bedCtx=bedCv.getContext('2d'); bedCtx.scale(dpr,dpr);
+  ratioCtx=ratioCv.getContext('2d'); ratioCtx.scale(dpr,dpr);
+  gaugeCtx=gaugeCv.getContext('2d'); gaugeCtx.scale(dpr,dpr);
+  distCtx=distCv.getContext('2d'); distCtx.scale(dpr,dpr);
+  transCtx=transCv.getContext('2d'); transCtx.scale(dpr,dpr);
+}
+
+/* ── Bed Panel ── */
+function drawBed(){
+  const W=bedCv.clientWidth, H=bedCv.clientHeight;
+  const ml=10,mr=30,mt=8,mb=38;
+  const pw=W-ml-mr, ph=H-mt-mb;
+  const ctx=bedCtx;
+  ctx.clearRect(0,0,W,H);
+
+  function px(x){return ml+x/LCHAN*pw;}
+  function py(z){return mt+(Z_MAX-z)/Z_MAX*ph;}
+
+  // Bed profile
+  ctx.beginPath();
+  ctx.moveTo(px(0),py(bedZ(0)));
+  for(let i=1;i<=100;i++){
+    const x=LCHAN*i/100;
+    ctx.lineTo(px(x),py(bedZ(x)));
+  }
+  ctx.lineTo(px(LCHAN),mt+ph);
+  ctx.lineTo(px(0),mt+ph);
+  ctx.closePath();
+  ctx.fillStyle='#e8dcc8';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(px(0),py(bedZ(0)));
+  for(let i=1;i<=100;i++){const x=LCHAN*i/100;ctx.lineTo(px(x),py(bedZ(x)));}
+  ctx.strokeStyle='#b5a48a';ctx.lineWidth=1.5;ctx.stroke();
+
+  // Water level
+  if(currentH>0.05){
+    ctx.beginPath();
+    ctx.moveTo(px(0),py(bedZ(0)+currentH));
+    for(let i=1;i<=100;i++){
+      const x=LCHAN*i/100;
+      ctx.lineTo(px(x),py(bedZ(x)+currentH));
+    }
+    for(let i=100;i>=0;i--){
+      const x=LCHAN*i/100;
+      ctx.lineTo(px(x),py(bedZ(x)));
+    }
+    ctx.closePath();
+    ctx.fillStyle='rgba(100,160,220,0.25)';
+    ctx.fill();
+  }
+
+  // Boulders (stable subsample by ID — no blinking)
+  const maxDraw=600;
+  const step=Math.max(1,Math.ceil(boulders.length/maxDraw));
+  for(let i=0;i<boulders.length;i++){
+    const b=boulders[i];
+    if(b.id%step!==0) continue;
+    const bx=px(b.x);
+    const bz=bedZ(b.x);
+    const by=py(bz)-Math.max(1.5,b.D*8);
+    const r=Math.max(1.5,b.D*8);
+    ctx.beginPath();ctx.arc(bx,by,r,0,2*Math.PI);
+    if(b.mobile){ctx.fillStyle='rgba(204,34,34,0.75)';}
+    else{const g=Math.min(0.35+b.D*0.15,0.55);ctx.fillStyle='rgba('+(g*255|0)+','+(g*255|0)+','+(g*260|0)+',0.65)';}
+    ctx.fill();
+  }
+
+  // Windows — drawn ON TOP of bed and boulders
+  ctx.fillStyle='rgba(33,102,172,0.18)';
+  ctx.fillRect(px(X_UP0),mt,px(X_UP1)-px(X_UP0),ph);
+  ctx.fillStyle='rgba(230,85,13,0.18)';
+  ctx.fillRect(px(X_DN0),mt,px(X_DN1)-px(X_DN0),ph);
+  ctx.setLineDash([3,3]);
+  ctx.lineWidth=1.5;
+  ctx.strokeStyle='rgba(33,102,172,0.6)';
+  ctx.strokeRect(px(X_UP0),mt,px(X_UP1)-px(X_UP0),ph);
+  ctx.strokeStyle='rgba(230,85,13,0.6)';
+  ctx.strokeRect(px(X_DN0),mt,px(X_DN1)-px(X_DN0),ph);
+  ctx.setLineDash([]);
+
+  // Labels below plot
+  const labY=mt+ph+12;
+  ctx.font='10px sans-serif';ctx.textAlign='center';
+  ctx.fillStyle='#2166ac';
+  ctx.fillText('upstream (10%\u20139%)',px((X_UP0+X_UP1)/2),labY);
+  ctx.fillStyle='#e6550d';
+  ctx.fillText('downstream (2%\u20131%)',px((X_DN0+X_DN1)/2),labY);
+
+  // x-axis ticks
+  ctx.fillStyle='#888';ctx.font='9px sans-serif';ctx.textAlign='center';
+  for(let d=0;d<=1000;d+=200){
+    ctx.fillText(d+'m',px(d),labY+14);
+  }
+}
+
+/* ── Ratio Panel ── */
+function drawRatio(){
+  const W=ratioCv.clientWidth, H=ratioCv.clientHeight;
+  const ml=40,mr=14,mt=22,mb=36;
+  const pw=W-ml-mr, ph=H-mt-mb;
+  const ctx=ratioCtx;
+  ctx.clearRect(0,0,W,H);
+
+  const logDmin=Math.log10(0.04), logDmax=Math.log10(1.5);
+  // Log y-axis: show ratio from 0.001 to 10
+  const logRmin=Math.log10(0.003), logRmax=Math.log10(5);
+
+  function mx(D){return ml+(Math.log10(D)-logDmin)/(logDmax-logDmin)*pw;}
+  function my(r){
+    if(r<=0) return mt+ph;
+    const lr=Math.log10(r);
+    return mt+(1-(lr-logRmin)/(logRmax-logRmin))*ph;
+  }
+
+  // Grid
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;
+  for(let lr=-2;lr<=1;lr+=0.5){
+    const rv=Math.pow(10,lr);
+    const y=my(rv);
+    if(y>=mt&&y<=mt+ph){ctx.beginPath();ctx.moveTo(ml,y);ctx.lineTo(ml+pw,y);ctx.stroke();}
+  }
+  for(let d of[0.05,0.1,0.2,0.5,1]){
+    if(d<0.04||d>1.5)continue;
+    ctx.beginPath();ctx.moveTo(mx(d),mt);ctx.lineTo(mx(d),mt+ph);ctx.stroke();
+  }
+
+  // ratio = 1 line (highlighted)
+  ctx.strokeStyle='rgba(200,0,0,0.15)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ml,my(1));ctx.lineTo(ml+pw,my(1));ctx.stroke();
+
+  // Axes
+  ctx.strokeStyle='#222';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ml,mt);ctx.lineTo(ml,mt+ph);ctx.lineTo(ml+pw,mt+ph);ctx.stroke();
+
+  // Theory curve — integrated over windows (not midpoint)
+  // R(D) = ∫_dn 1/φ(D,x) dx  /  ∫_up 1/φ(D,x) dx
+  // which equals N_up/N_dn in steady state
+  const alpha=getAlpha();
+  const NQUAD=40;
+
+  function integInvPhi(D, x0, x1){
+    let s=0;
+    for(let k=0;k<NQUAD;k++){
+      const x=x0+(x1-x0)*(k+0.5)/NQUAD;
+      const p=Math.max(phiA(D,x,alpha),1e-15);
+      s+=1/p;
+    }
+    return s/NQUAD;
+  }
+
+  ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=2.5;
+  ctx.beginPath();
+  let started=false;
+  for(let i=0;i<=200;i++){
+    const ld=logDmin+(logDmax-logDmin)*i/200;
+    const D=Math.pow(10,ld);
+    const iUp=integInvPhi(D,X_UP0,X_UP1);
+    const iDn=integInvPhi(D,X_DN0,X_DN1);
+    const r=iDn>1e-10?iUp/iDn:0;
+    if(r<=0) continue;
+    const px2=mx(D),py2=my(r);
+    if(py2<mt||py2>mt+ph) continue;
+    if(!started){ctx.moveTo(px2,py2);started=true;}else ctx.lineTo(px2,py2);
+  }
+  ctx.stroke();
+
+  // Observed points with error bars
+  // Only show bins where BOTH windows have enough counts
+  // Relative error: σ(r)/r ≈ √(1/n_up + 1/n_dn)
+  const MIN_COUNT=20;
+  if(nSamples>0){
+    for(let i=0;i<NBINS;i++){
+      const nu=sumUp[i], nd=sumDn[i];
+      if(nu<MIN_COUNT||nd<MIN_COUNT) continue;
+      const r=nu/nd;
+      const D=D_CENTERS[i];
+      if(D<0.04||D>1.5||r<=0) continue;
+      const py2=my(r);
+      if(py2<mt-5||py2>mt+ph+5) continue;
+
+      // Dot
+      ctx.beginPath();ctx.arc(mx(D),Math.max(mt,Math.min(mt+ph,py2)),3.5,0,2*Math.PI);
+      ctx.fillStyle=r<=1.05?'#2166ac':'#cc2222';
+      ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=0.5;ctx.stroke();
+    }
+  }
+
+  // Tick labels — x
+  ctx.fillStyle='#666';ctx.font='9px sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='top';
+  for(let d of[0.05,0.1,0.2,0.5,1]){if(d>=0.04&&d<=1.5)ctx.fillText(d,mx(d),mt+ph+5);}
+  ctx.fillText('D (m)',ml+pw/2,mt+ph+25);
+
+  // Tick labels — y (log)
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let lr of[-2,-1,0]){
+    const rv=Math.pow(10,lr);
+    const y=my(rv);
+    if(y>=mt&&y<=mt+ph) ctx.fillText(rv<1?rv.toFixed(Math.max(0,-lr)):rv.toFixed(0),ml-4,y);
+  }
+  // Sub-ticks
+  ctx.fillStyle='#aaa';ctx.font='8px sans-serif';
+  for(let rv of[0.02,0.05,0.2,0.5,2]){
+    const y=my(rv);
+    if(y>=mt+8&&y<=mt+ph-8) ctx.fillText(rv<1?rv.toFixed(rv<0.1?2:1):rv.toFixed(0),ml-4,y);
+  }
+
+  // y-axis label
+  ctx.fillStyle='#666';ctx.font='9px sans-serif';
+  ctx.save();ctx.translate(10,mt+ph/2);ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center';ctx.fillText('n\u1D64\u1D56 / n\u1D48\u2099',0,0);
+  ctx.restore();
+
+  // Title
+  ctx.fillStyle='#222';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('Ratio (log scale)',ml+pw/2,12);
+}
+
+/* ── Gauge Panel ── */
+let gaugeH=0; // displayed h
+function drawGauge(){
+  // Match bed panel: mt=8, mb=38 → bar spans same vertical range as the bed plot area
+  const W=46,H=200;
+  const ctx=gaugeCtx;
+  const mt=8,mb=38,barW=18,barL=12;
+  const bh=H-mt-mb;
+  const hMax=H_GAUGE_MAX;
+  ctx.clearRect(0,0,W,H);
+
+  // Bar background
+  ctx.fillStyle='#f0f0f0';
+  ctx.fillRect(barL,mt,barW,bh);
+  ctx.strokeStyle='#ccc';ctx.lineWidth=1;
+  ctx.strokeRect(barL,mt,barW,bh);
+
+  // Fill
+  const frac=Math.min(gaugeH/hMax,1);
+  const fillH=frac*bh;
+  ctx.fillStyle='rgba(100,160,220,0.6)';
+  ctx.fillRect(barL,mt+bh-fillH,barW,fillH);
+
+  // Ticks
+  ctx.fillStyle='#888';ctx.font='8px monospace';ctx.textAlign='left';
+  for(let h=0;h<=hMax;h+=2){
+    const y=mt+bh*(1-h/hMax);
+    ctx.fillRect(barL+barW,y-0.5,3,1);
+    ctx.fillText(h,barL+barW+5,y+3);
+  }
+
+  // Label at bottom
+  ctx.fillStyle='#222';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
+  ctx.fillText('h(m)',barL+barW/2,H-14);
+  ctx.fillStyle='#2166ac';ctx.font='bold 10px monospace';
+  ctx.fillText(gaugeH.toFixed(1),barL+barW/2,H-3);
+}
+
+/* ── Flow Distribution Panel ── */
+function drawDist(){
+  const W=distCv.clientWidth, H=distCv.clientHeight;
+  const ml=44,mr=14,mt=22,mb=36;
+  const pw=W-ml-mr, ph=H-mt-mb;
+  const ctx=distCtx;
+  if(!ctx) return;
+  ctx.clearRect(0,0,W,H);
+
+  const alpha=getAlpha();
+  const hMax=H_GAUGE_MAX;
+  // P(h > x) = (H_MIN/x)^alpha  for x > H_MIN
+  // pdf: f(x) = alpha * H_MIN^alpha * x^(-(alpha+1))
+  // Plot exceedance P(h > x) on log scale
+
+  const logPmin=-5, logPmax=0;
+
+  function mx(h){return ml+h/hMax*pw;}
+  function my(logP){return mt+(logPmax-logP)/(logPmax-logPmin)*ph;}
+
+  // Grid
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;
+  for(let lp=0;lp>=-4;lp--){
+    const y=my(lp);
+    ctx.beginPath();ctx.moveTo(ml,y);ctx.lineTo(ml+pw,y);ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle='#222';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ml,mt);ctx.lineTo(ml,mt+ph);ctx.lineTo(ml+pw,mt+ph);ctx.stroke();
+
+  // Exceedance curve
+  ctx.strokeStyle='#2166ac';ctx.lineWidth=2;
+  ctx.beginPath();
+  let started=false;
+  for(let i=0;i<=150;i++){
+    const h=H_MIN+i/150*(hMax-H_MIN);
+    const p=Math.pow(H_MIN/h,alpha);
+    const lp=Math.log10(Math.max(p,1e-6));
+    if(lp<logPmin) break;
+    const x=mx(h),y=my(lp);
+    if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // Current flood marker
+  if(currentH>H_MIN){
+    const p=Math.pow(H_MIN/currentH,alpha);
+    const lp=Math.log10(Math.max(p,1e-8));
+    if(lp>=logPmin){
+      const cx2=mx(currentH),cy2=my(lp);
+      ctx.beginPath();ctx.arc(cx2,cy2,3.5,0,2*Math.PI);
+      ctx.fillStyle='#cc2222';ctx.fill();
+    }
+    // Vertical line at current h
+    ctx.strokeStyle='rgba(204,34,34,0.3)';ctx.lineWidth=1;
+    ctx.setLineDash([2,2]);
+    ctx.beginPath();ctx.moveTo(mx(currentH),mt);ctx.lineTo(mx(currentH),mt+ph);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Title
+  ctx.fillStyle='#222';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('Flood exceedance',ml+pw/2,12);
+
+  // x-axis labels
+  ctx.fillStyle='#666';ctx.font='9px sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+  for(let h of[0,2,4,6,8,10]){
+    if(h<=hMax) ctx.fillText(h,mx(h),mt+ph+5);
+  }
+  ctx.fillText('h (m)',ml+pw/2,mt+ph+17);
+
+  // y-axis labels
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let lp=0;lp>=-4;lp--){
+    const y=my(lp);
+    if(y>=mt&&y<=mt+ph){
+      const label=lp===0?'1':lp===-1?'0.1':lp===-2?'10\u207B\u00B2':lp===-3?'10\u207B\u00B3':'10\u207B\u2074';
+      ctx.fillText(label,ml-5,y);
+    }
+  }
+  // y-axis title
+  ctx.save();ctx.translate(10,mt+ph/2);ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center';ctx.fillText('P(h > x)',0,0);
+  ctx.restore();
+
+  // Alpha label
+  ctx.fillStyle='#2166ac';ctx.font='bold 10px sans-serif';ctx.textAlign='right';
+  ctx.fillText('\u03B1 = '+alpha.toFixed(1),ml+pw-2,mt+14);
+}
+
+/* ── Transport Law Panel ── */
+function drawTransport(){
+  const W=transCv.clientWidth, H=transCv.clientHeight;
+  const ml=40,mr=14,mt=22,mb=36;
+  const pw=W-ml-mr, ph=H-mt-mb;
+  const ctx=transCtx;
+  if(!ctx) return;
+  ctx.clearRect(0,0,W,H);
+
+  const dsMax=5;
+  const ellMax=5.5;
+
+  function mx(ds){return ml+ds/dsMax*pw;}
+  function my(e){return mt+(1-Math.min(e,ellMax)/ellMax)*ph;}
+
+  // Grid
+  ctx.strokeStyle='#eee';ctx.lineWidth=0.5;
+  for(let e=1;e<=5;e++){ctx.beginPath();ctx.moveTo(ml,my(e));ctx.lineTo(ml+pw,my(e));ctx.stroke();}
+  for(let d=1;d<=4;d++){ctx.beginPath();ctx.moveTo(mx(d),mt);ctx.lineTo(mx(d),mt+ph);ctx.stroke();}
+
+  // Axes
+  ctx.strokeStyle='#222';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(ml,mt);ctx.lineTo(ml,mt+ph);ctx.lineTo(ml+pw,mt+ph);ctx.stroke();
+
+  // All four laws (ordered: 1/D, C&H, linear, constant)
+  const laws=[
+    {name:'inverse',  label:'1/D*',         color:'#b2182b', fn:function(ds){return 1/Math.max(ds,0.1);}},
+    {name:'church',   label:'C&H (1992)',   color:'#e66101', fn:function(ds){
+      const a=Math.max(1-Math.log10(Math.max(ds,0.01)),0.001);return 1.77*Math.pow(a,1.35);
+    }},
+    {name:'linear',   label:'2 \u2212 \u00BDD*',  color:'#1b7837', fn:function(ds){return Math.max(2-0.5*ds,0.05);}},
+    {name:'constant', label:'Constant',     color:'#2166ac', fn:function(ds){return 1;}},
+  ];
+
+  const currentLaw=getLaw();
+
+  for(const law of laws){
+    const active=law.name===currentLaw;
+    ctx.strokeStyle=active?law.color:'#ccc';
+    ctx.lineWidth=active?2.5:1;
+    ctx.beginPath();
+    for(let i=0;i<=150;i++){
+      const ds=0.05+i/150*(dsMax-0.05);
+      const e=law.fn(ds);
+      const x=mx(ds),y=my(e);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  // Legend — only active law labeled
+  for(const law of laws){
+    if(law.name===currentLaw){
+      ctx.fillStyle=law.color;ctx.font='bold 10px sans-serif';ctx.textAlign='right';
+      ctx.fillText(law.label,ml+pw-2,mt+14);
+    }
+  }
+
+  // Title
+  ctx.fillStyle='#222';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+  ctx.fillText('Transport law',ml+pw/2,12);
+
+  // x-axis
+  ctx.fillStyle='#666';ctx.font='9px sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+  for(let d=0;d<=5;d++) ctx.fillText(d,mx(d),mt+ph+5);
+  ctx.fillText('D* = D / D\u2085\u2080',ml+pw/2,mt+ph+20);
+
+  // y-axis
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let e=0;e<=5;e++){
+    const y=my(e);
+    if(y>=mt&&y<=mt+ph) ctx.fillText(e,ml-5,y);
+  }
+  ctx.save();ctx.translate(10,mt+ph/2);ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center';ctx.fillText('\u2113*(D*)',0,0);
+  ctx.restore();
+}
+
+
+/* ═══════════════ RENDER ═══════════════ */
+let frameCount=0;
+function render(){
+  // Bed + gauge every frame (cheap, shows boulder movement)
+  drawBed();drawGauge();
+  // Transport law panel every 6th frame; flood + ratio every frame
+  if(frameCount%6===0) drawTransport();
+  drawDist();drawRatio();
+  frameCount++;
+  const info=document.getElementById('sim-info');
+  info.textContent='floods='+nFlood+'  pop='+boulders.length+
+    '  h='+currentH.toFixed(1)+'m  samples='+nSamples+
+    '  \u03B1='+getAlpha()+'  law='+getLaw();
+}
+
+/* ═══════════════ ANIMATION ═══════════════ */
+function animate(){
+  if(running){
+    const sp=getSpeed();
+    const alpha=getAlpha();
+    const law=getLaw();
+
+    // Reset counts on law change (not alpha — lets you watch the transition)
+    if(law!==prevLaw){
+      sumUp.fill(0); sumDn.fill(0); nSamples=0;
+      prevLaw=law;
+    }
+    prevAlpha=alpha;
+
+    for(let i=0;i<sp;i++){
+      const h=drawPareto(alpha);
+      simStep(h);
+      gaugeH=h;
+    }
+  }
+  render();
+  requestAnimationFrame(animate);
+}
+
+/* ═══════════════ UI ═══════════════ */
+document.getElementById('btn-start').onclick=()=>{running=true;};
+document.getElementById('btn-pause').onclick=()=>{running=false;};
+document.getElementById('btn-reset').onclick=()=>{resetSim();render();};
+document.getElementById('sl-alpha').oninput=e=>{document.getElementById('v-alpha').textContent=parseFloat(e.target.value).toFixed(1);};
+document.getElementById('sl-beta').oninput=e=>{document.getElementById('v-beta').textContent=parseFloat(e.target.value).toFixed(2);};
+document.getElementById('sl-speed').oninput=e=>{document.getElementById('v-speed').textContent=e.target.value;};
+
+/* ═══════════════ INIT ═══════════════ */
+window.addEventListener('resize',()=>{initCanvas();render();});
+initCanvas();
+resetSim();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
