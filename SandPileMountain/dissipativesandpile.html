@@ -435,8 +435,9 @@ function renderContours(levels, maxH) {
         }
       }
     };
-    stroke(0, 0, 0, 200); strokeWeight(2.4); drawMS();
-    stroke(levelColor);   strokeWeight(1);   drawMS();
+    stroke(levelColor);
+    strokeWeight(1);
+    drawMS();
     // Labels in a fixed column on the left side of the topo panel, one row per
     // elevation level — position depends only on T, so labels never move.
     {
