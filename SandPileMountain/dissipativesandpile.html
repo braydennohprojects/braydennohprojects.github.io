@@ -1,0 +1,520 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Sandpile dissipative + flow accumulation</title>
+<script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+<style>
+  body { margin: 0; background: #111; color: #ddd; font: 13px monospace;
+         display: flex; flex-direction: column; align-items: center; padding: 12px; }
+  #hud { margin-bottom: 8px; text-align: center; }
+  #controls { margin-bottom: 8px; display: flex; gap: 24px; align-items: center; }
+  #controls label { display: flex; align-items: center; gap: 6px; }
+  #controls input[type=range] { width: 180px; }
+  #controls .val { display: inline-block; min-width: 2ch; text-align: right; color: #9df; }
+  #labels { display: flex; gap: 8px; margin-bottom: 4px; }
+  #labels div { text-align: center; }
+  kbd { background: #222; border: 1px solid #444; padding: 1px 6px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="intro" style="max-width:980px; text-align:center; margin-bottom:24px; color:#fff; font-size:12px; line-height:1.5;">
+  Dissipative sandpile. At each step, one grain is dropped randomly on an active cell, and at each iteration every cell (height <i>h</i>) compares itself with its D8 neighborhood and picks out the lowest value among the 8 neighbors, then topples whenever the relative drop from <i>h</i> to that lowest value reaches <b>SLOPE</b> — when that happens, an amount defined by <b>ERODE</b> is subtracted from <i>h</i> and those blocks simply leave the grid (no redistribution to any neighbor), and the check repeats on the affected cells until nothing is unstable anymore.
+</div>
+<div id="labels"><div>Topography</div><div>Flow accumulation</div></div>
+<div id="canvasWrap"></div>
+<div id="stats" style="margin:28px 0 8px;"></div>
+<div id="controls">
+  <label>N <input type="range" id="nSlider" min="100" max="500" step="10" value="200"><span class="val" id="nVal">200</span></label>
+  <label>SLOPE <input type="range" id="slopeSlider" min="1" max="16" step="1" value="10"><span class="val" id="slopeVal">10</span></label>
+  <label>ERODE <input type="range" id="erodeSlider" min="1" max="16" step="1" value="1"><span class="val" id="erodeVal">1</span></label>
+  <label>SPEED <input type="range" id="speedSlider" min="1" max="100000" step="1" value="100000"><span class="val" id="speedVal">100000</span></label>
+  <label><input type="checkbox" id="contourToggle" checked> show contours</label>
+  <button id="pauseBtn" type="button">pause</button>
+  <button id="clearBtn" type="button">clear</button>
+</div>
+<div style="margin:4px 0 8px; color:#fff; font-size:11px; text-align:center;">
+  Contours are drawn at every 50th block of elevation (h = 50, 100, 150, …) on the largest connected region at each level.
+</div>
+<script>
+// Dissipative sandpile + side-by-side D8 flow accumulation (SFD, sort-by-elevation).
+
+let N = 200;
+let NN = N * N;
+let SLOPE = 10;
+let ERODE = 1;
+let GRID_PX = computeDisplayPx();  // display size per panel (px); responsive to viewport
+
+function computeDisplayPx() {
+  // body padding 12px each side (24) + 8px gap between panels; sim takes 70% of available width
+  const avail = window.innerWidth - 24 - 8;
+  const totalW = avail * 0.7;
+  return Math.max(200, Math.min(900, Math.floor(totalW / 2)));
+}
+
+function applyLabelWidths() {
+  document.querySelectorAll('#labels div').forEach(d => { d.style.width = GRID_PX + 'px'; });
+}
+
+let grid, active, activeIdx, nActive = 0;
+let dirtyList, dirtyFlag, dirtyLen = 0;
+let unstableBuf;
+let topoImg, flowImg;
+
+let recv, accArr, orderArr;
+let contourBuf;
+let mainMask, ccVisited, ccStack;
+
+let totalGrains = 0, totalTopples = 0;
+let paused = false;
+let grainsPerFrame = 100000;
+let showContours = true;
+
+const NB8 = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+function rebuildGrid(newN) {
+  N = newN;
+  NN = N * N;
+  grid = new Int32Array(NN);
+  active = new Uint8Array(NN);
+  activeIdx = new Int32Array(NN);
+  dirtyList = new Int32Array(NN);
+  dirtyFlag = new Uint8Array(NN);
+  unstableBuf = new Int32Array(NN);
+  recv = new Int32Array(NN);
+  accArr = new Int32Array(NN);
+  orderArr = new Int32Array(NN);
+  contourBuf = new Int32Array(NN);
+  mainMask = new Uint8Array(NN);
+  ccVisited = new Uint8Array(NN);
+  ccStack = new Int32Array(NN);
+  topoImg = createImage(N, N);
+  flowImg = createImage(N, N);
+  nActive = 0;
+  dirtyLen = 0;
+  totalGrains = 0;
+  totalTopples = 0;
+
+  // Composite domain — each quadrant has a different outer boundary:
+  //   TL: quarter circle (curved)        TR: full square (right-angle corner)
+  //   BL: L-shape (small square notched  BR: 45° diagonal cut
+  //       out of the bottom-left corner)
+  const half = N / 2;
+  const quarter = half / 2;  // notch size for BL
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      const top = i < half, left = j < half;
+      let ok = false;
+      if (top && left) {
+        const di = i - half, dj = j - half;
+        ok = di * di + dj * dj <= half * half;
+      } else if (top && !left) {
+        ok = true;
+      } else if (!top && !left) {
+        ok = (i - half) + (j - half) <= half;
+      } else {
+        ok = !(i >= N - quarter && j < quarter);
+      }
+      if (ok) {
+        active[i * N + j] = 1;
+        activeIdx[nActive++] = i * N + j;
+      }
+    }
+  }
+}
+
+function setup() {
+  const c = createCanvas(GRID_PX * 2 + 8, GRID_PX);
+  c.parent('canvasWrap');
+  applyLabelWidths();
+  noSmooth();
+  noStroke();
+
+  window.addEventListener('resize', () => {
+    GRID_PX = computeDisplayPx();
+    resizeCanvas(GRID_PX * 2 + 8, GRID_PX);
+    applyLabelWidths();
+  });
+
+  rebuildGrid(N);
+
+  const nSlider = document.getElementById('nSlider');
+  const slopeSlider = document.getElementById('slopeSlider');
+  const erodeSlider = document.getElementById('erodeSlider');
+  const nVal = document.getElementById('nVal');
+  const slopeVal = document.getElementById('slopeVal');
+  const erodeVal = document.getElementById('erodeVal');
+  nSlider.addEventListener('input', () => { nVal.textContent = nSlider.value; });
+  nSlider.addEventListener('change', () => { rebuildGrid(+nSlider.value); });
+  slopeSlider.addEventListener('input', () => {
+    SLOPE = +slopeSlider.value;
+    slopeVal.textContent = SLOPE;
+    for (let k = 0; k < nActive; k++) markDirty(activeIdx[k]);
+  });
+  erodeSlider.addEventListener('input', () => {
+    ERODE = +erodeSlider.value;
+    erodeVal.textContent = ERODE;
+  });
+  const speedSlider = document.getElementById('speedSlider');
+  const speedVal = document.getElementById('speedVal');
+  speedSlider.addEventListener('input', () => {
+    grainsPerFrame = +speedSlider.value;
+    speedVal.textContent = grainsPerFrame;
+  });
+  const contourToggle = document.getElementById('contourToggle');
+  showContours = contourToggle.checked;
+  contourToggle.addEventListener('change', () => {
+    showContours = contourToggle.checked;
+  });
+  const pauseBtn = document.getElementById('pauseBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  pauseBtn.addEventListener('click', () => {
+    paused = !paused;
+    pauseBtn.textContent = paused ? 'resume' : 'pause';
+  });
+  clearBtn.addEventListener('click', () => {
+    grid.fill(0); dirtyFlag.fill(0); dirtyLen = 0;
+    totalGrains = 0; totalTopples = 0;
+  });
+}
+
+// Ice colormap: dark navy -> blue -> light blue -> white. t in [0,1], higher = lighter.
+function ice(t) {
+  if (t < 0) t = 0; else if (t > 1) t = 1;
+  let a, b, ca, cb;
+  if (t < 0.25)      { a = 0.00; b = 0.25; ca = [0.02,0.03,0.12]; cb = [0.05,0.15,0.45]; }
+  else if (t < 0.55) { a = 0.25; b = 0.55; ca = [0.05,0.15,0.45]; cb = [0.20,0.45,0.80]; }
+  else if (t < 0.80) { a = 0.55; b = 0.80; ca = [0.20,0.45,0.80]; cb = [0.65,0.85,0.97]; }
+  else               { a = 0.80; b = 1.00; ca = [0.65,0.85,0.97]; cb = [1.00,1.00,1.00]; }
+  const u = (t - a) / (b - a);
+  return [255*(ca[0]+u*(cb[0]-ca[0])), 255*(ca[1]+u*(cb[1]-ca[1])), 255*(ca[2]+u*(cb[2]-ca[2]))];
+}
+const terrain = ice;                       // topography: taller -> lighter
+function flowColor(t) { return ice(1 - t); } // flow: more accumulation -> darker
+
+// Thermal (hot) colormap: black → dark red → red → orange → yellow → white.
+// t in [0,1]. Returns "rgb(r, g, b)" string for p5 stroke/fill.
+function thermalColor(t) {
+  if (t < 0) t = 0; else if (t > 1) t = 1;
+  let r, g, b;
+  if (t < 1/3)       { r = 3 * t;         g = 0;            b = 0; }
+  else if (t < 2/3)  { r = 1;              g = 3 * t - 1;    b = 0; }
+  else               { r = 1;              g = 1;            b = 3 * t - 2; }
+  return `rgb(${Math.round(255*r)}, ${Math.round(255*g)}, ${Math.round(255*b)})`;
+}
+
+function slopeAtIdx(c) {
+  const i = (c / N) | 0, j = c - i * N;
+  const v = grid[c];
+  let m = 2147483647;
+  for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+    if (di === 0 && dj === 0) continue;
+    const ni = i + di, nj = j + dj;
+    if (ni < 0 || ni >= N || nj < 0 || nj >= N) { m = 0; continue; }
+    const nc = ni * N + nj;
+    if (!active[nc]) { m = 0; continue; }
+    const h = grid[nc];
+    if (h < m) m = h;
+  }
+  if (m === 2147483647) m = 0;
+  return v - m;
+}
+
+function markDirty(c) { if (!dirtyFlag[c]) { dirtyFlag[c] = 1; dirtyList[dirtyLen++] = c; } }
+function markNeighborhood(c) {
+  const i = (c / N) | 0, j = c - i * N;
+  markDirty(c);
+  if (i > 0)              markDirty(c - N);
+  if (i < N - 1)          markDirty(c + N);
+  if (j > 0)              markDirty(c - 1);
+  if (j < N - 1)          markDirty(c + 1);
+  if (i > 0 && j > 0)     markDirty(c - N - 1);
+  if (i > 0 && j < N-1)   markDirty(c - N + 1);
+  if (i < N-1 && j > 0)   markDirty(c + N - 1);
+  if (i < N-1 && j < N-1) markDirty(c + N + 1);
+}
+
+function relax() {
+  let toppleCount = 0, safety = 0;
+  while (dirtyLen > 0) {
+    let uLen = 0;
+    for (let k = 0; k < dirtyLen; k++) {
+      const c = dirtyList[k];
+      dirtyFlag[c] = 0;
+      if (grid[c] >= SLOPE && slopeAtIdx(c) >= SLOPE) unstableBuf[uLen++] = c;
+    }
+    dirtyLen = 0;
+    if (uLen === 0) break;
+    for (let k = 0; k < uLen; k++) {
+      const c = unstableBuf[k];
+      grid[c] -= ERODE;
+      toppleCount++;
+      markNeighborhood(c);
+    }
+    if (++safety > 2000000) { console.warn('relax runaway'); break; }
+  }
+  totalTopples += toppleCount;
+}
+
+function addGrainAndRelax() {
+  const c = activeIdx[(Math.random() * nActive) | 0];
+  grid[c] += 1;
+  totalGrains++;
+  markDirty(c);
+  relax();
+}
+
+// D8 single-flow-direction; sort by elevation desc; accumulate.
+// Inactive cells treated as height 0 (boundary acts as sink).
+function computeFlowAcc() {
+  for (let r = 0; r < N; r++) {
+    for (let j = 0; j < N; j++) {
+      const i = r * N + j;
+      recv[i] = i;
+      if (!active[i]) continue;
+      const z = grid[i];
+      let dzMax = 0;
+      for (let k = 0; k < 8; k++) {
+        const nr = r + NB8[k][0], nj = j + NB8[k][1];
+        if (nr < 0 || nr >= N || nj < 0 || nj >= N) {
+          const dz = z - 0;
+          if (dz > dzMax) { dzMax = dz; recv[i] = -1; }
+          continue;
+        }
+        const nIdx = nr * N + nj;
+        const nz = active[nIdx] ? grid[nIdx] : 0;
+        const dz = z - nz;
+        if (dz > dzMax) { dzMax = dz; recv[i] = active[nIdx] ? nIdx : -1; }
+      }
+    }
+  }
+  for (let i = 0; i < NN; i++) { orderArr[i] = i; accArr[i] = active[i] ? 1 : 0; }
+  const arr = Array.from(orderArr);
+  arr.sort((a, b) => grid[b] - grid[a]);
+  for (let k = 0; k < NN; k++) {
+    const i = arr[k];
+    if (!active[i]) continue;
+    const rc = recv[i];
+    if (rc !== i && rc !== -1) accArr[rc] += accArr[i];
+  }
+}
+
+function drawTopo(maxH) {
+  topoImg.loadPixels();
+  const px = topoImg.pixels;
+  const inv = 1 / Math.max(1, maxH);
+  for (let k = 0; k < NN; k++) {
+    const p = k << 2;
+    if (!active[k]) { px[p]=15; px[p+1]=15; px[p+2]=15; px[p+3]=255; continue; }
+    const rgb = terrain(grid[k] * inv);
+    px[p]=rgb[0]; px[p+1]=rgb[1]; px[p+2]=rgb[2]; px[p+3]=255;
+  }
+  topoImg.updatePixels();
+  image(topoImg, 0, 0, GRID_PX, GRID_PX);
+}
+
+// Finds largest 8-connected (D8) component of cells with grid[k] >= T.
+// Fills mainMask (1 in main component, 0 else). Returns {area, perimeter}.
+// Perimeter counts 4-neighbor faces on the mainMask boundary (cell-edge geometry).
+function computeContourData(T) {
+  ccVisited.fill(0);
+  mainMask.fill(0);
+  let maxStart = -1, maxSize = 0;
+  for (let start = 0; start < NN; start++) {
+    if (ccVisited[start]) continue;
+    if (!active[start] || grid[start] < T) { ccVisited[start] = 1; continue; }
+    let size = 0, top = 0;
+    const compStart = start;
+    ccStack[top++] = start;
+    ccVisited[start] = 1;
+    while (top > 0) {
+      const c = ccStack[--top];
+      size++;
+      const i = (c / N) | 0, j = c - i * N;
+      for (let dk = 0; dk < 8; dk++) {
+        const ni = i + NB8[dk][0], nj = j + NB8[dk][1];
+        if (ni < 0 || ni >= N || nj < 0 || nj >= N) continue;
+        const nc = ni * N + nj;
+        if (!ccVisited[nc] && active[nc] && grid[nc] >= T) { ccVisited[nc] = 1; ccStack[top++] = nc; }
+      }
+    }
+    if (size > maxSize) { maxSize = size; maxStart = compStart; }
+  }
+  if (maxStart === -1) return { area: 0, perimeter: 0 };
+  ccVisited.fill(0);
+  let top = 0, area = 0, perimeter = 0;
+  ccStack[top++] = maxStart;
+  ccVisited[maxStart] = 1;
+  mainMask[maxStart] = 1;
+  while (top > 0) {
+    const c = ccStack[--top];
+    area++;
+    const i = (c / N) | 0, j = c - i * N;
+    // 8-neighbor BFS expansion (D8)
+    for (let dk = 0; dk < 8; dk++) {
+      const ni = i + NB8[dk][0], nj = j + NB8[dk][1];
+      if (ni < 0 || ni >= N || nj < 0 || nj >= N) continue;
+      const nc = ni * N + nj;
+      if (!ccVisited[nc] && active[nc] && grid[nc] >= T) { ccVisited[nc] = 1; mainMask[nc] = 1; ccStack[top++] = nc; }
+    }
+    // 4-neighbor perimeter count (cell faces not adjacent to main)
+    if (i > 0)     { const nc = c - N; if (!active[nc] || grid[nc] < T) perimeter++; } else perimeter++;
+    if (i < N - 1) { const nc = c + N; if (!active[nc] || grid[nc] < T) perimeter++; } else perimeter++;
+    if (j > 0)     { const nc = c - 1; if (!active[nc] || grid[nc] < T) perimeter++; } else perimeter++;
+    if (j < N - 1) { const nc = c + 1; if (!active[nc] || grid[nc] < T) perimeter++; } else perimeter++;
+  }
+  return { area, perimeter };
+}
+
+const CONTOUR_STEP = 50;
+function computeContourLevels() {
+  if (nActive === 0) return [];
+  let maxH = 0;
+  for (let k = 0; k < NN; k++) if (active[k] && grid[k] > maxH) maxH = grid[k];
+  if (maxH < CONTOUR_STEP) return [];
+  const levels = [];
+  for (let t = CONTOUR_STEP; t <= maxH; t += CONTOUR_STEP) levels.push(t);
+  return levels;
+}
+
+function renderContours(levels, maxH) {
+  const stats = [];
+  if (levels.length === 0) return stats;
+  const s = GRID_PX / N;
+  const fontPx = Math.max(9, Math.min(14, Math.floor(s * 2.2)));
+  textSize(fontPx);
+  textAlign(LEFT, TOP);
+  textFont('monospace');
+  for (let li = 0; li < levels.length; li++) {
+    const T = levels[li];
+    const res = computeContourData(T);
+    stats.push({ T, area: res.area, perimeter: res.perimeter });
+    if (res.area === 0) continue;
+    // thermal colormap anchored to absolute elevation: h=0 is black, h=maxH is white-yellow
+    const ct = maxH > 0 ? T / maxH : 0;
+    const levelColor = thermalColor(ct);
+    noFill();
+    // Marching squares on the binary mainMask: guarantees one closed loop per
+    // connected region, no gaps, no isolated islands. 8-conn interior disambiguates
+    // the saddle cases so the contour never splits through the mask.
+    // Draw twice: dark outline underneath, colored line on top — so every hue
+    // stays legible regardless of the terrain color beneath it.
+    const drawMS = () => {
+      for (let i = -1; i < N; i++) {
+        for (let j = -1; j < N; j++) {
+          const inTL = (i >= 0 && j >= 0)             ? mainMask[i * N + j]             : 0;
+          const inTR = (i >= 0 && j + 1 < N)          ? mainMask[i * N + j + 1]         : 0;
+          const inBR = (i + 1 < N && j + 1 < N)       ? mainMask[(i + 1) * N + j + 1]   : 0;
+          const inBL = (i + 1 < N && j >= 0)          ? mainMask[(i + 1) * N + j]       : 0;
+          let code = 0;
+          if (inTL) code |= 1;
+          if (inTR) code |= 2;
+          if (inBR) code |= 4;
+          if (inBL) code |= 8;
+          if (code === 0 || code === 15) continue;
+          const topX = (j + 0.5) * s, topY = (i + 0) * s;
+          const rightX = (j + 1) * s, rightY = (i + 0.5) * s;
+          const botX = (j + 0.5) * s, botY = (i + 1) * s;
+          const leftX = (j + 0) * s,  leftY = (i + 0.5) * s;
+          switch (code) {
+            case 1: case 14: line(topX,topY,leftX,leftY); break;
+            case 2: case 13: line(topX,topY,rightX,rightY); break;
+            case 3: case 12: line(leftX,leftY,rightX,rightY); break;
+            case 4: case 11: line(rightX,rightY,botX,botY); break;
+            case 6: case 9:  line(topX,topY,botX,botY); break;
+            case 7: case 8:  line(leftX,leftY,botX,botY); break;
+            case 5:  // TL+BR in main: 8-conn joins through center -> pair top-right, left-bottom
+              line(topX,topY,rightX,rightY);
+              line(leftX,leftY,botX,botY);
+              break;
+            case 10: // TR+BL in main: 8-conn joins through center -> pair top-left, right-bottom
+              line(topX,topY,leftX,leftY);
+              line(rightX,rightY,botX,botY);
+              break;
+          }
+        }
+      }
+    };
+    stroke(0, 0, 0, 200); strokeWeight(2.4); drawMS();
+    stroke(levelColor);   strokeWeight(1);   drawMS();
+    // Labels in a fixed column on the left side of the topo panel, one row per
+    // elevation level — position depends only on T, so labels never move.
+    {
+      const label = 'h=' + T;
+      const padX = 3, padY = 2;
+      const tw = textWidth(label);
+      const th = textAscent() + textDescent();
+      const rowIdx = Math.max(0, Math.round(T / CONTOUR_STEP) - 1);
+      const x = 4;
+      const y = 4 + rowIdx * (th + padY * 2 + 3);
+      noStroke();
+      fill(17, 17, 17, 220);
+      rect(x, y, tw + padX * 2, th + padY * 2);
+      fill(levelColor);
+      text(label, x + padX, y + padY);
+    }
+  }
+  noStroke();
+  return stats;
+}
+
+function drawFlow() {
+  let maxA = 1;
+  for (let k = 0; k < NN; k++) if (accArr[k] > maxA) maxA = accArr[k];
+  const logMax = Math.log10(maxA + 1);
+  flowImg.loadPixels();
+  const px = flowImg.pixels;
+  for (let k = 0; k < NN; k++) {
+    const p = k << 2;
+    if (!active[k]) { px[p]=15; px[p+1]=15; px[p+2]=15; px[p+3]=255; continue; }
+    const t = Math.log10(accArr[k] + 1) / logMax;
+    const rgb = flowColor(t);
+    px[p]=rgb[0]; px[p+1]=rgb[1]; px[p+2]=rgb[2]; px[p+3]=255;
+  }
+  flowImg.updatePixels();
+  image(flowImg, GRID_PX + 8, 0, GRID_PX, GRID_PX);
+  return maxA;
+}
+
+function draw() {
+  if (!paused) for (let k = 0; k < grainsPerFrame; k++) addGrainAndRelax();
+  background(15);
+
+  let maxH = 1, sum = 0;
+  for (let k = 0; k < NN; k++) {
+    if (!active[k]) continue;
+    if (grid[k] > maxH) maxH = grid[k];
+    sum += grid[k];
+  }
+  computeFlowAcc();
+  drawTopo(maxH);
+  if (showContours) {
+    const levels = computeContourLevels();
+    renderContours(levels, maxH);
+  }
+  const maxA = drawFlow();
+
+  const hud = document.getElementById('stats');
+  if (hud) {
+    hud.textContent =
+      `${paused ? '[PAUSED] ' : ''}grid: ${N}x${N}  grains/frame: ${grainsPerFrame}  |  ` +
+      `grains: ${totalGrains}  topples: ${totalTopples}  |  ` +
+      `SLOPE: ${SLOPE}  ERODE: ${ERODE}  |  ` +
+      `maxH: ${maxH}  mean: ${(sum/nActive).toFixed(2)}  maxAcc: ${maxA}  |  fps: ${frameRate().toFixed(0)}`;
+  }
+}
+
+function keyPressed() {
+  if (key === ' ') {
+    paused = !paused;
+    const btn = document.getElementById('pauseBtn');
+    if (btn) btn.textContent = paused ? 'resume' : 'pause';
+  }
+  if (key === 'c' || key === 'C') {
+    grid.fill(0); dirtyFlag.fill(0); dirtyLen = 0;
+    totalGrains = 0; totalTopples = 0;
+  }
+}
+</script>
+</body>
+</html>
