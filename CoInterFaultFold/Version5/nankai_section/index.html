@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nankai Trough – Slab2 + Crust1.0</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0e0e10; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  #map { width: 100%; height: 520px; }
+  #profile { width: 100%; height: 260px; background: #fff; }
+  .floatpanel {
+    position: absolute; top: 10px; left: 10px; z-index: 1000;
+    background: rgba(20,20,24,0.92); border: 1px solid #333; border-radius: 8px;
+    padding: 10px 12px; width: 200px; font-size: 12px; color: #ddd;
+  }
+  .floatpanel h1 { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #f2f2f2; }
+  .floatpanel label { display: block; padding: 2px 0; cursor: pointer; }
+  .floatpanel input[type=checkbox] { margin-right: 6px; vertical-align: middle; }
+  .legend-row { display: flex; align-items: center; gap: 5px; margin: 2px 0; }
+  .legend-row .sw { width: 12px; height: 12px; border-radius: 2px; border: 1px solid rgba(255,255,255,0.15); }
+  .slab-bar {
+    width: 160px; height: 10px; border-radius: 2px; border: 1px solid #444; margin-top: 6px;
+    background: linear-gradient(to right, #fee08b, #fdae61, #f46d43, #d73027, #a50026, #67001f);
+  }
+  .slab-bar-labels { display: flex; justify-content: space-between; font-size: 10px; color: #999; margin-top: 2px; width: 160px; }
+  .moho-bar {
+    width: 160px; height: 10px; border-radius: 2px; border: 1px solid #444; margin-top: 6px;
+    background: linear-gradient(to right, #c7e9c0, #74c476, #238b45, #00441b);
+  }
+  .moho-bar-labels { display: flex; justify-content: space-between; font-size: 10px; color: #999; margin-top: 2px; width: 160px; }
+  .section-line { color: #aaa; font-size: 11px; margin-top: 8px; border-top: 1px solid #444; padding-top: 6px; }
+  .leaflet-popup-content-wrapper { background: #1a1a1e; color: #eee; border-radius: 6px; }
+  .leaflet-popup-tip { background: #1a1a1e; }
+  .leaflet-popup-content { margin: 8px 10px; font-size: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div style="position: relative;">
+  <div id="map"></div>
+  <div class="floatpanel">
+    <h1>Nankai Trough Structure</h1>
+    <label><input type="checkbox" id="tog-slab" checked> Slab depth (Slab2)</label>
+    <div class="slab-bar"></div>
+    <div class="slab-bar-labels"><span>0</span><span>−100</span><span>−200 km</span></div>
+    <label style="margin-top:8px;"><input type="checkbox" id="tog-moho" checked> Moho depth (Crust1.0)</label>
+    <div class="moho-bar"></div>
+    <div class="moho-bar-labels"><span>−10</span><span>−25</span><span>−40 km</span></div>
+    <div class="section-line">Click map to place cross-section line</div>
+  </div>
+</div>
+<canvas id="profile"></canvas>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const map = L.map('map', { preferCanvas: true, zoomControl: false, zoomSnap: 0.5 })
+  .setView([33, 135], 6);
+L.control.zoom({ position: 'topright' }).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OSM &copy; CARTO',
+  subdomains: 'abcd', maxZoom: 19
+}).addTo(map);
+
+let SLAB = [], MOHO = [];
+let slabLayer = L.layerGroup().addTo(map);
+let mohoLayer = L.layerGroup().addTo(map);
+let sectionLine = null;
+let sectionEndpoints = null;
+
+// --- color scales ---
+function slabColor(dep) {
+  // dep is negative; map 0 to -200 onto warm scale
+  const t = Math.min(1, Math.max(0, -dep / 200));
+  const r = Math.round(255 - t * 155);
+  const g = Math.round(224 - t * 200);
+  const b = Math.round(140 - t * 100);
+  return `rgb(${r},${g},${b})`;
+}
+function slabColorCSS(dep) {
+  const t = Math.min(1, Math.max(0, -dep / 200));
+  if (t < 0.2) return '#fee08b';
+  if (t < 0.4) return '#fdae61';
+  if (t < 0.6) return '#f46d43';
+  if (t < 0.8) return '#d73027';
+  if (t < 0.9) return '#a50026';
+  return '#67001f';
+}
+
+function mohoColor(dep) {
+  // dep is negative; map -10 to -40
+  const t = Math.min(1, Math.max(0, (-dep - 10) / 30));
+  const r = Math.round(199 - t * 199);
+  const g = Math.round(233 - t * 165);
+  const b = Math.round(192 - t * 165);
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawSlab() {
+  slabLayer.clearLayers();
+  if (!document.getElementById('tog-slab').checked) return;
+  for (const p of SLAB) {
+    const m = L.circleMarker([p[1], p[0]], {
+      radius: 2.2,
+      color: 'none', weight: 0,
+      fillColor: slabColorCSS(p[2]), fillOpacity: 0.75,
+    });
+    m.bindPopup(`<b>Slab top</b><br>Depth: ${p[2].toFixed(0)} km<br>${p[1].toFixed(1)}°N, ${p[0].toFixed(1)}°E`);
+    slabLayer.addLayer(m);
+  }
+}
+
+function drawMoho() {
+  mohoLayer.clearLayers();
+  if (!document.getElementById('tog-moho').checked) return;
+  // draw as semi-transparent rectangles (0.5° cells)
+  const step = 0.5;
+  for (const p of MOHO) {
+    const bounds = [
+      [p[1] - step/2, p[0] - step/2],
+      [p[1] + step/2, p[0] + step/2]
+    ];
+    const rect = L.rectangle(bounds, {
+      color: 'none', weight: 0,
+      fillColor: mohoColor(p[2]),
+      fillOpacity: 0.35,
+    });
+    rect.bindPopup(`<b>Moho</b><br>Depth: ${p[2].toFixed(0)} km<br>Surface: ${p[3].toFixed(1)} km<br>${p[1].toFixed(1)}°N, ${p[0].toFixed(1)}°E`);
+    mohoLayer.addLayer(rect);
+  }
+}
+
+// --- cross-section profile ---
+const profCanvas = document.getElementById('profile');
+const pCtx = profCanvas.getContext('2d');
+const dpr = window.devicePixelRatio || 1;
+
+function sizeProfile() {
+  const w = profCanvas.parentElement ? window.innerWidth : 800;
+  profCanvas.style.width = w + 'px';
+  profCanvas.style.height = '260px';
+  profCanvas.width = w * dpr;
+  profCanvas.height = 260 * dpr;
+}
+sizeProfile();
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function drawProfile() {
+  const W = profCanvas.width, H = profCanvas.height;
+  pCtx.fillStyle = '#fff';
+  pCtx.fillRect(0, 0, W, H);
+
+  if (!sectionEndpoints) {
+    pCtx.fillStyle = '#999';
+    pCtx.font = `${13 * dpr}px system-ui, sans-serif`;
+    pCtx.textAlign = 'center';
+    pCtx.fillText('Click two points on the map to draw a cross-section', W/2, H/2);
+    return;
+  }
+
+  const [p1, p2] = sectionEndpoints;
+  const totalDist = haversine(p1.lat, p1.lng, p2.lat, p2.lng);
+  const PAD_L = 60 * dpr, PAD_R = 20 * dpr, PAD_T = 20 * dpr, PAD_B = 40 * dpr;
+  const Z_MIN = -250, Z_MAX = 10;
+
+  const xOf = d => PAD_L + (d / totalDist) * (W - PAD_L - PAD_R);
+  const yOf = z => PAD_T + (1 - (z - Z_MIN) / (Z_MAX - Z_MIN)) * (H - PAD_T - PAD_B);
+
+  // collect slab and moho points near the section line (within 15 km corridor)
+  const corridor = 15;
+  const nSteps = 200;
+  const slabProf = [];
+  const mohoProf = [];
+
+  // interpolate along line
+  for (let i = 0; i <= nSteps; i++) {
+    const t = i / nSteps;
+    const lat = p1.lat + t * (p2.lat - p1.lat);
+    const lon = p1.lng + t * (p2.lng - p1.lng);
+    const dist = haversine(p1.lat, p1.lng, lat, lon);
+
+    // find nearest slab point
+    let bestSlab = null, bestSlabDist = Infinity;
+    for (const s of SLAB) {
+      const d = haversine(lat, lon, s[1], s[0]);
+      if (d < bestSlabDist && d < corridor) {
+        bestSlabDist = d;
+        bestSlab = s[2];
+      }
+    }
+    if (bestSlab !== null) slabProf.push({ dist, dep: bestSlab });
+
+    // find nearest moho point
+    let bestMoho = null, bestMohoDist = Infinity;
+    for (const m of MOHO) {
+      const d = haversine(lat, lon, m[1], m[0]);
+      if (d < bestMohoDist && d < 60) {
+        bestMohoDist = d;
+        bestMoho = { dep: m[2], surface: m[3] };
+      }
+    }
+    if (bestMoho !== null) mohoProf.push({ dist, ...bestMoho });
+  }
+
+  // axes
+  pCtx.strokeStyle = '#111'; pCtx.lineWidth = 1 * dpr;
+  pCtx.beginPath();
+  pCtx.moveTo(PAD_L, PAD_T); pCtx.lineTo(PAD_L, H - PAD_B);
+  pCtx.lineTo(W - PAD_R, H - PAD_B); pCtx.stroke();
+
+  // zero line
+  pCtx.strokeStyle = '#ccc'; pCtx.lineWidth = 0.5 * dpr;
+  pCtx.beginPath(); pCtx.moveTo(PAD_L, yOf(0)); pCtx.lineTo(W - PAD_R, yOf(0)); pCtx.stroke();
+
+  // fills
+  // crust fill (surface to moho)
+  if (mohoProf.length > 1) {
+    pCtx.fillStyle = 'rgba(0, 105, 62, 0.1)';
+    pCtx.beginPath();
+    for (let i = 0; i < mohoProf.length; i++) {
+      const x = xOf(mohoProf[i].dist), y = yOf(Math.min(mohoProf[i].surface, 5));
+      if (i === 0) pCtx.moveTo(x, y); else pCtx.lineTo(x, y);
+    }
+    for (let i = mohoProf.length - 1; i >= 0; i--) {
+      pCtx.lineTo(xOf(mohoProf[i].dist), yOf(mohoProf[i].dep));
+    }
+    pCtx.closePath(); pCtx.fill();
+  }
+
+  // mantle wedge fill (moho to slab top where moho > slab)
+  if (mohoProf.length > 1 && slabProf.length > 1) {
+    pCtx.fillStyle = 'rgba(255, 200, 50, 0.12)';
+    pCtx.beginPath();
+    let started = false;
+    const wedgeTop = [], wedgeBot = [];
+    for (const mp of mohoProf) {
+      // find closest slab point at same distance
+      let closest = null, bestD = Infinity;
+      for (const sp of slabProf) {
+        const dd = Math.abs(sp.dist - mp.dist);
+        if (dd < bestD) { bestD = dd; closest = sp; }
+      }
+      if (closest && mp.dep > closest.dep) {
+        wedgeTop.push({ dist: mp.dist, dep: mp.dep });
+        wedgeBot.push({ dist: mp.dist, dep: closest.dep });
+      }
+    }
+    if (wedgeTop.length > 1) {
+      pCtx.beginPath();
+      for (let i = 0; i < wedgeTop.length; i++) {
+        const x = xOf(wedgeTop[i].dist), y = yOf(wedgeTop[i].dep);
+        if (i === 0) pCtx.moveTo(x, y); else pCtx.lineTo(x, y);
+      }
+      for (let i = wedgeBot.length - 1; i >= 0; i--) {
+        pCtx.lineTo(xOf(wedgeBot[i].dist), yOf(wedgeBot[i].dep));
+      }
+      pCtx.closePath(); pCtx.fill();
+    }
+  }
+
+  // draw curves
+  const drawCurve = (arr, distKey, depKey, color, lw) => {
+    if (arr.length < 2) return;
+    pCtx.strokeStyle = color; pCtx.lineWidth = lw * dpr;
+    pCtx.beginPath();
+    for (let i = 0; i < arr.length; i++) {
+      const x = xOf(arr[i][distKey]), y = yOf(arr[i][depKey]);
+      if (i === 0) pCtx.moveTo(x, y); else pCtx.lineTo(x, y);
+    }
+    pCtx.stroke();
+  };
+
+  drawCurve(slabProf, 'dist', 'dep', '#c8141e', 2.5);
+  drawCurve(mohoProf, 'dist', 'dep', '#00693E', 2);
+  // surface
+  if (mohoProf.length > 1) {
+    pCtx.strokeStyle = '#111'; pCtx.lineWidth = 1.5 * dpr;
+    pCtx.beginPath();
+    for (let i = 0; i < mohoProf.length; i++) {
+      const x = xOf(mohoProf[i].dist), y = yOf(Math.min(mohoProf[i].surface, 5));
+      if (i === 0) pCtx.moveTo(x, y); else pCtx.lineTo(x, y);
+    }
+    pCtx.stroke();
+  }
+
+  // tick labels
+  pCtx.fillStyle = '#111';
+  pCtx.font = `${11 * dpr}px system-ui, sans-serif`;
+  pCtx.textAlign = 'right'; pCtx.textBaseline = 'middle';
+  for (let z = -250; z <= 0; z += 50) {
+    pCtx.fillText(`${z}`, PAD_L - 5 * dpr, yOf(z));
+    pCtx.strokeStyle = '#eee'; pCtx.lineWidth = 0.5 * dpr;
+    pCtx.beginPath(); pCtx.moveTo(PAD_L, yOf(z)); pCtx.lineTo(W - PAD_R, yOf(z)); pCtx.stroke();
+  }
+  pCtx.textAlign = 'center'; pCtx.textBaseline = 'top';
+  for (let d = 0; d <= totalDist; d += 50) {
+    pCtx.fillText(`${d.toFixed(0)}`, xOf(d), H - PAD_B + 5 * dpr);
+  }
+
+  // axis labels
+  pCtx.save();
+  pCtx.translate(14 * dpr, (PAD_T + H - PAD_B) / 2);
+  pCtx.rotate(-Math.PI / 2);
+  pCtx.textAlign = 'center';
+  pCtx.fillText('depth (km)', 0, 0);
+  pCtx.restore();
+  pCtx.textAlign = 'center'; pCtx.textBaseline = 'alphabetic';
+  pCtx.fillText('distance along section (km)', (PAD_L + W - PAD_R) / 2, H - 4 * dpr);
+
+  // legend
+  const lx = W - PAD_R - 180 * dpr, ly = PAD_T + 10 * dpr;
+  pCtx.font = `${10 * dpr}px system-ui, sans-serif`;
+  pCtx.textAlign = 'left'; pCtx.textBaseline = 'middle';
+  const items = [['#c8141e', 'Slab top (Slab2)'], ['#00693E', 'Moho (Crust1.0)'], ['#111', 'Surface']];
+  items.forEach(([col, label], i) => {
+    const y = ly + i * 14 * dpr;
+    pCtx.strokeStyle = col; pCtx.lineWidth = 2 * dpr;
+    pCtx.beginPath(); pCtx.moveTo(lx, y); pCtx.lineTo(lx + 16 * dpr, y); pCtx.stroke();
+    pCtx.fillStyle = '#111';
+    pCtx.fillText(label, lx + 20 * dpr, y);
+  });
+}
+
+// --- map click for cross-section ---
+let clickCount = 0;
+let markers = [];
+
+map.on('click', function(e) {
+  clickCount++;
+  if (clickCount === 1) {
+    // first click
+    sectionEndpoints = null;
+    if (sectionLine) { map.removeLayer(sectionLine); sectionLine = null; }
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+    const m = L.circleMarker(e.latlng, { radius: 5, color: '#fff', fillColor: '#fff', fillOpacity: 1, weight: 2 }).addTo(map);
+    markers.push(m);
+    sectionEndpoints = [e.latlng];
+  } else if (clickCount === 2) {
+    // second click
+    sectionEndpoints.push(e.latlng);
+    const m = L.circleMarker(e.latlng, { radius: 5, color: '#fff', fillColor: '#fff', fillOpacity: 1, weight: 2 }).addTo(map);
+    markers.push(m);
+    sectionLine = L.polyline([sectionEndpoints[0], sectionEndpoints[1]], {
+      color: '#fff', weight: 2, dashArray: '6,4'
+    }).addTo(map);
+    drawProfile();
+    clickCount = 0;
+  }
+});
+
+// --- toggle handlers ---
+document.getElementById('tog-slab').addEventListener('change', drawSlab);
+document.getElementById('tog-moho').addEventListener('change', drawMoho);
+
+// --- load data ---
+fetch('../nankai_data.json').then(r => r.json()).then(data => {
+  SLAB = data.slab;
+  MOHO = data.moho;
+  drawSlab();
+  drawMoho();
+  drawProfile();
+});
+</script>
+</body>
+</html>
