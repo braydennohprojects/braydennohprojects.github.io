@@ -134,7 +134,7 @@
   <aside class="sidebar">
     <h1>Japan Uplift</h1>
     <p>
-      A website comparing <strong>geodetic</strong> and <strong>geologic</strong>
+      A website comparing geodetic and geologic
       uplift across Japan, from GNSS time series and marine/river terrace dating,
       and how to model both interseismic and long-term uplift.
     </p>
@@ -169,6 +169,10 @@
         </div>
       </div>
 
+      <p style="font-size:14px; color:#444; margin:12px 0;">
+        Each dot is a dated marine or river terrace whose elevation records how much the ground has risen over the last hundred thousand years.
+      </p>
+
       <div class="ref">
         <strong>Source.</strong>
         Japan Atomic Energy Agency (JAEA), Neotectonic uplift database &mdash;
@@ -177,7 +181,7 @@
     </section>
 
     <section class="panel" id="panel2">
-      <h2>Interseismic uplift from GNSS (t&lt;2011)</h2>
+      <h2>Interseismic uplift from GNSS (t&lt;Tohoku 2011)</h2>
 
       <div class="panel-figure">
         <div id="map2"></div>
@@ -194,6 +198,10 @@
           </div>
         </div>
       </div>
+
+      <p style="font-size:14px; color:#444; margin:12px 0;">
+        Each dot is a GPS station whose position is continuously measured, and the vertical velocity shows how fast the ground is moving right now between earthquakes.
+      </p>
 
       <div class="ref">
         <strong>Source.</strong>
@@ -215,11 +223,14 @@
         in some reference frame. For subduction zones, this is not the case as the footwall is
         subducting, therefore the uplift may all be subducted producing 0 uplift in the hanging
         wall. In fact, this is the idealized model in Savage&#39;s original paper as he assumed
-        0 surface deformation. The current iteration of thought experiment and code beautifully
-        extends both subduction zones (0 uplift) and continental zones (non-zero uplift) using
+        0 surface deformation. The current iteration of thought experiment and code extends
+        both subduction zones (0 uplift) and continental zones (non-zero uplift) using
         a single parameter called alpha which controls the partition of overthrust and
-        underthrust. Because interseismic is just the difference between the steady state and
-        coseismic, the single model works for all colliding plates.
+        underthrust. At the observer triangle, the relative velocity is constant regardless
+        of alpha, but the partition controls how much of that convergence is accommodated by
+        the footwall moving versus the hanging wall moving. What is currently unclear is
+        what happens at the mantle wedge, often called the cold nose, and perhaps there are
+        additional phenomena which the current model lacks to capture.
       </p>
 
       <div class="panel-figure" style="background:transparent; padding:0; border:0;">
