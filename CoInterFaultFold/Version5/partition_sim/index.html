@@ -663,8 +663,8 @@ function drawSurfaceConv(ctx, s) {
   const pxScale = 70 * dpr;
 
   const xObs = 80;
-  const xFW  = 10;
-  const xHW  = 120;
+  const xFW  = -20;
+  const xHW  = 170;
   const zArr = 8;
 
   const mag_hw  =     s.phi     * s.Vp;
@@ -688,7 +688,7 @@ function drawSurfaceConv(ctx, s) {
                xSec(xHW), ySec(zArr) - 6 * dpr);
 
   ctx.fillText('V_relative = V_plate',
-               xSec(xObs) + dxR / 2, ySec(zArr) + dyR / 2 + 16 * dpr);
+               xSec(xObs) + dxR / 2, ySec(zArr) + dyR / 2 - 6 * dpr);
 
   ctx.fillText('V_footwall = (1−φ)·V_plate',
                xSec(xFW), ySec(zArr) - 6 * dpr);
