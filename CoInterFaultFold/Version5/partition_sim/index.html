@@ -149,8 +149,14 @@ function sizeCanvas(c, cssH) {
   c.width  = Math.round(cssW * dpr);
   c.height = Math.round(cssH * dpr);
 }
-sizeCanvas(cProf, 150);
-sizeCanvas(cSec,  250);
+function sizeSection() {
+  // 1:1 length scale — the section's inner height follows its inner width
+  const cssW = cSec.parentElement.clientWidth - 20;
+  const innerW = cssW - (PAD_L + PAD_R) / dpr;
+  const innerH = innerW * (Z_MAX - Z_MIN) / (X_MAX_SEC - X_MIN_SEC);
+  sizeCanvas(cSec, innerH + (PAD_T_SEC + PAD_B_SEC) / dpr);
+}
+sizeCanvas(cProf, 300);
 
 const pxProf = () => cProf.width,  pyProf = () => cProf.height;
 const pxSec  = () => cSec.width,   pySec  = () => cSec.height;
@@ -158,6 +164,7 @@ const pxSec  = () => cSec.width,   pySec  = () => cSec.height;
 const PAD_L = 70 * dpr, PAD_R = 20 * dpr;
 const PAD_T_PROF = 22 * dpr, PAD_B_PROF = 26 * dpr;
 const PAD_T_SEC  = 12 * dpr, PAD_B_SEC  = 50 * dpr;
+sizeSection();
 
 const xProf = x => PAD_L + (x - X_MIN_PROF) / (X_MAX_PROF - X_MIN_PROF) * (pxProf() - PAD_L - PAD_R);
 const yProf = v => PAD_T_PROF + (1 - (v - UP_MIN) / (UP_MAX - UP_MIN))
@@ -808,8 +815,8 @@ document.getElementById('btn-pause').addEventListener('click', (e) => {
 });
 
 window.addEventListener('resize', () => {
-  sizeCanvas(cProf, 150);
-  sizeCanvas(cSec,  250);
+  sizeCanvas(cProf, 300);
+  sizeSection();
 });
 
 initParticles();
