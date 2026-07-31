@@ -486,35 +486,41 @@ function drawSection(s) {
     ctx.font = `${11 * dpr}px system-ui, sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     const ly = ySec(6);
-    const r = 5 * dpr;
     const sz = 9 * dpr;
 
-    // measure to right-align the whole row
-    const gap = 6 * dpr;
-    const lockTextW = ctx.measureText('locked region').width;
-    const obsTextW = ctx.measureText('observer').width;
-    const spacing = 18 * dpr;
-    const totalW = 2 * r + gap + lockTextW + spacing + 2 * sz * 0.7 + gap + obsTextW;
-    let cx = W - PAD_R - totalW - 10 * dpr;
-
-    // locked region
-    ctx.fillStyle = 'orangered';
-    ctx.beginPath(); ctx.arc(cx + r, ly, r, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#111';
-    ctx.fillText('locked region', cx + 2 * r + gap, ly);
-    cx += 2 * r + gap + lockTextW + spacing;
-
-    // observer
-    const triCx = cx + sz * 0.7;
-    ctx.fillStyle = '#DAA520';
-    ctx.beginPath();
-    ctx.moveTo(triCx, ly - sz * 0.6);
-    ctx.lineTo(triCx - sz * 0.7, ly + sz * 0.4);
-    ctx.lineTo(triCx + sz * 0.7, ly + sz * 0.4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#111';
-    ctx.fillText('observer', triCx + sz * 0.7 + gap, ly);
+    // right-aligned row: locked (red line), creeping (blue line), observer
+    const gap = 6 * dpr, spacing = 16 * dpr, lineW = 16 * dpr;
+    const items = [
+      ['line', '#c81020', 'locked'],
+      ['line', '#1432c8', 'creeping'],
+      ['tri',  '#DAA520', 'observer'],
+    ];
+    let totalW = 0;
+    for (const [kind, , label] of items) {
+      totalW += (kind === 'line' ? lineW : 2 * sz * 0.7) + gap
+              + ctx.measureText(label).width + spacing;
+    }
+    let cx = W - PAD_R - totalW - 4 * dpr;
+    for (const [kind, col, label] of items) {
+      if (kind === 'line') {
+        ctx.strokeStyle = col; ctx.lineWidth = 2 * dpr;
+        ctx.beginPath(); ctx.moveTo(cx, ly); ctx.lineTo(cx + lineW, ly);
+        ctx.stroke();
+        cx += lineW + gap;
+      } else {
+        const tcx = cx + sz * 0.7;
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.moveTo(tcx, ly - sz * 0.6);
+        ctx.lineTo(tcx - sz * 0.7, ly + sz * 0.4);
+        ctx.lineTo(tcx + sz * 0.7, ly + sz * 0.4);
+        ctx.closePath(); ctx.fill();
+        cx += 2 * sz * 0.7 + gap;
+      }
+      ctx.fillStyle = '#111';
+      ctx.fillText(label, cx, ly);
+      cx += ctx.measureText(label).width + spacing;
+    }
   }
 }
 
