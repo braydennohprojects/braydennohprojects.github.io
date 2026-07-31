@@ -9,7 +9,7 @@
   body { margin: 0; padding: 0; background: #fff; color: #222;
     font-family: Georgia, "Times New Roman", serif;
     font-size: 15px; line-height: 1.55; }
-  .container { max-width: 1500px; margin: 0 auto;
+  .container { max-width: 900px; margin: 0 auto;
     padding: 16px 24px; display: flex; }
   aside.sidebar { width: 280px; flex-shrink: 0;
     border-right: 1px solid #ddd; padding-right: 24px;
@@ -156,7 +156,7 @@ function sizeSection() {
   const innerH = innerW * (Z_MAX - Z_MIN) / (X_MAX_SEC - X_MIN_SEC);
   sizeCanvas(cSec, innerH + (PAD_T_SEC + PAD_B_SEC) / dpr);
 }
-sizeCanvas(cProf, 300);
+sizeCanvas(cProf, 180);
 
 const pxProf = () => cProf.width,  pyProf = () => cProf.height;
 const pxSec  = () => cSec.width,   pySec  = () => cSec.height;
@@ -815,7 +815,7 @@ document.getElementById('btn-pause').addEventListener('click', (e) => {
 });
 
 window.addEventListener('resize', () => {
-  sizeCanvas(cProf, 300);
+  sizeCanvas(cProf, 180);
   sizeSection();
 });
 
