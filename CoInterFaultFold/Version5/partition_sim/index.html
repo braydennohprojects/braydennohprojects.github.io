@@ -88,7 +88,24 @@
 
   <main class="main">
 
-    <h2>Cross-section (distance from trench, km)</h2>
+    <h2>How does interseismic and long-term uplift rate relate to each other?</h2>
+
+    <p>
+      This is a thought experiment to incorporate long-term uplift in subduction
+      plate. In reality, it is a simple extension of the ramp-flat geometry but
+      uplift in previous models were all thought as overthrust, because the
+      footwall is considered to be fixed in some reference frame. For subduction
+      zones, this is not the case as the footwall is subducting, therefore the
+      uplift may all be subducted producing 0 uplift in the hanging wall. In
+      fact, this is the idealized model in Savage's original paper as he assumed
+      0 surface deformation. The current iteration of thought experiment and
+      code extends both subduction zones (0 uplift) and continental zones
+      (non-zero uplift) using a single parameter called phi which controls the
+      partition of overthrust and underthrust. At the observer triangle, the
+      relative velocity is constant regardless of phi, but the partition
+      controls how much of that convergence is accommodated by the footwall
+      moving versus the hanging wall moving.
+    </p>
 
     <div class="panel-figure">
       <canvas id="profile" width="1720" height="280"></canvas>
